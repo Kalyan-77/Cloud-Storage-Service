@@ -7,6 +7,7 @@ router.post('/register',auth.register);
 router.post('/login',auth.login);
 router.post('/logout',auth.Logout);
 router.get('/checkSession', auth.checkSession);
+router.get('/all-users',auth.getBackendData);
 // router.post('/:id',auth.getUserById);
 // router.put('/update/:id',auth.UpdateUser);
 // router.delete('/delete/:id',auth.Delete);
@@ -14,6 +15,7 @@ router.get('/checkSession', auth.checkSession);
 router.get('/:id', authMiddleWare, auth.getUserById);
 router.put('/update/:id', authMiddleWare, auth.UpdateUser);
 router.delete('/delete/:id', authMiddleWare, auth.Delete);
+
 
 
 module.exports = router;

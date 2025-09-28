@@ -139,4 +139,16 @@ exports.checkSession = async(req, res) =>{
     }
 };
 
+// Get all users (without passwords)
+exports.getBackendData = async (req, res) => {
+    try {
+        const users = await Users.find().select('-password'); // exclude passwords
+        res.status(200).json({ message: 'Users fetched successfully', users });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server Error', error: err.message });
+    }
+};
+
+
 // module.exports = router;.
