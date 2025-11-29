@@ -27,6 +27,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // Frontend origin (set this to your Vercel app URL in production)
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const MAC = process.env.MAC_URL || 'http://localhost:5174';
 
 // When running behind a proxy (Render, etc.) express needs to trust the proxy
 if (isProduction) {
@@ -36,6 +37,7 @@ if (isProduction) {
 // CORS: allow only the frontend origin and enable credentials for cookies/sessions
 app.use(cors({
     origin: FRONTEND_URL,
+    origin: MAC,
     credentials: true,
 }));
 
