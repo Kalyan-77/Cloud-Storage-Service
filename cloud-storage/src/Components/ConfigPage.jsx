@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import ConfigSidebar from '../Pages/Dashboard/Configure/ConfigSidebar'
-import CloudConfig from '../Pages/Dashboard/Configure/CloudConfig'
+import CloudConfig from '../Pages/Dashboard/Configure/cloudConfig.jsx';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Api from '../Pages/Dashboard/Configure/Api';
 import InstallApps from '../Pages/Dashboard/Configure/InstalledApps';
