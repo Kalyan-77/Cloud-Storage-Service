@@ -34,9 +34,13 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // Middleware
 app.use(cors({
-    origin: "*",
-    // credentials: true
+    origin: true,
+    credentials: true,
+    methods: "GET,POST,PUT,DELETE,PATCH,OPTIONS",
+    allowedHeaders: "Content-Type,Authorization",
 }));
+
+app.options("*", cors());
 app.use(express.json());
 app.use(cookieParser());
 
