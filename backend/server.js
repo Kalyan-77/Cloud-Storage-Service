@@ -36,8 +36,7 @@ if (isProduction) {
 
 // CORS: allow only the frontend origin and enable credentials for cookies/sessions
 app.use(cors({
-    origin: FRONTEND_URL,
-    origin: MAC,
+    origin: [FRONTEND_URL, MAC],
     credentials: true,
 }));
 
