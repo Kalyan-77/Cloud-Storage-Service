@@ -22,29 +22,42 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log('MongoDB Connected'))
 .catch(err => console.error('Error Connecting MongoDB:', err));
 
+// Determine environment
+const isProduction = process.env.NODE_ENV === 'production';
+
+// CORS configuration
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://cloud-storage-service.vercel.app'
+];
+
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:5173','http://localhost:5174'],
+    origin: allowedOrigins,
     credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser());
 
-// Session
+// Session configuration
 app.use(session({
-    secret: 'Kalyan123',
+    secret: process.env.SESSION_SECRET || 'Kalyan123',
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
         mongoUrl: process.env.MONGO_URI,
-        collectionName: 'sessions'
+        collectionName: 'sessions',
+        touchAfter: 24 * 3600 // lazy session update (in seconds)
     }),
     cookie: {
         httpOnly: true, 
-        secure: false, //change to true while deploying
+        secure: isProduction, // true in production, false in development
+        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site, 'lax' for same-site
         maxAge: 1000 * 60 * 60 * 24, // 1 day
-        sameSite: 'lax', //(Cross-site cookies need none)
-    }
+        domain: isProduction ? '.onrender.com' : undefined // allow cross-subdomain in production
+    },
+    proxy: isProduction // trust proxy in production
 }));
 
 // Routes
@@ -53,8 +66,7 @@ app.use('/cloud', googledrive);
 app.use('/finder', finder);
 app.use('/config', configRoutes);
 
-
-const port = process.env.PORT;
+const port = process.env.PORT || 5000;
 app.listen(port, () => {
     console.log(`🚀 Server running at http://localhost:${port}`);
 });
