@@ -26,16 +26,16 @@ mongoose.connect(process.env.MONGO_URI, {
 const isProduction = process.env.NODE_ENV === 'production';
 
 // CORS configuration
-const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'https://cloud-storage-service.vercel.app'
-];
+// const allowedOrigins = [
+//     'http://localhost:5173',
+//     'http://localhost:5174',
+//     'https://cloud-storage-service.vercel.app'
+// ];
 
 // Middleware
 app.use(cors({
-    origin: allowedOrigins,
-    credentials: true
+    origin: "*",
+    // credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser());
