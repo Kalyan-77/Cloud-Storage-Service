@@ -24,8 +24,8 @@ const Login = () => {
     try {      
       const res = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
-        // headers: { 'Content-Type': 'application/json' },
-        // credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password })
       });
 
