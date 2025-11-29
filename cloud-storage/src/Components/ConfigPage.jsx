@@ -21,10 +21,9 @@ const ConfigPage = () => {
 
       <main 
         ref={mainRef}
-        className="flex-1 bg-gray-50 h-full overflow-y-auto"
-        style={{ marginLeft: '320px' }}
+        className="flex-1 bg-gray-50 h-full overflow-y-auto ml-0 lg:ml-80"
       >
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <Routes>
             <Route index element={<CloudConfig/>} />
             <Route path="/installesapps" element={<InstallApps/>} />

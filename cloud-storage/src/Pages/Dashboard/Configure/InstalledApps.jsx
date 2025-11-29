@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Trash2, Check, Loader, Loader2, Save, RefreshCw } from 'lucide-react';
+import { Download, Trash2, Check, Loader, Loader2, Save, RefreshCw, Lock } from 'lucide-react';
 import { useAuth } from '../../../Context/AuthContext';
 import { BASE_URL } from '../../../../config';
 import vscode from '../../../assets/Apps/vscode.svg';
@@ -12,7 +12,6 @@ import edge from '../../../assets/Apps/edge.png';
 import finder from '../../../assets/Apps/finder.png';
 import preferences from '../../../assets/Apps/preferences.png';
 import notepad from '../../../assets/Apps/notes.png';
-
 import terminal from '../../../assets/Apps/terminal.png';
 import photos from '../../../assets/Apps/photos.png';
 import messages from '../../../assets/Apps/message.png';
@@ -21,8 +20,13 @@ import mail from '../../../assets/Apps/mail.png';
 import music from '../../../assets/Apps/music.png';
 import reminders from '../../../assets/Apps/reminders.png';
 import vlc from '../../../assets/Apps/vlc.png';
+
 export default function InstallApps() {
   const { user } = useAuth();
+  
+  // Default system apps that cannot be uninstalled
+  const defaultSystemApps = ['Finder', 'Preferences', 'App Store', 'Terminal', 'Trash'];
+
   const [apps, setApps] = useState([
     {
       id: 1,
@@ -32,7 +36,8 @@ export default function InstallApps() {
       size: '95 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 2,
@@ -40,9 +45,10 @@ export default function InstallApps() {
       description: 'Install and Use new applications',
       icon: appstore,
       size: '550 MB',
-      installed: false,
+      installed: true,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: true
     },
     {
       id: 3,
@@ -50,9 +56,10 @@ export default function InstallApps() {
       description: 'System App to Send the Trash',
       icon: bin,
       size: '120 MB',
-      installed: false,
+      installed: true,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: true
     },
     {
       id: 4,
@@ -62,7 +69,8 @@ export default function InstallApps() {
       size: '180 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 5,
@@ -72,7 +80,8 @@ export default function InstallApps() {
       size: '210 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 6,
@@ -82,7 +91,8 @@ export default function InstallApps() {
       size: '45 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 7,
@@ -92,7 +102,8 @@ export default function InstallApps() {
       size: '45 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 8,
@@ -100,9 +111,10 @@ export default function InstallApps() {
       description: 'All Your Documents are present',
       icon: finder,
       size: '45 MB',
-      installed: false,
+      installed: true,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: true
     },
     {
       id: 9,
@@ -110,9 +122,10 @@ export default function InstallApps() {
       description: 'Add Your Preferences to make changes in your OS',
       icon: preferences,
       size: '70 MB',
-      installed: false,
+      installed: true,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: true
     },
     {
       id: 10,
@@ -122,7 +135,8 @@ export default function InstallApps() {
       size: '70 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 11,
@@ -130,9 +144,10 @@ export default function InstallApps() {
       description: 'Use Terminal to make easy',
       icon: terminal,
       size: '70 MB',
-      installed: false,
+      installed: true,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: true
     },
     {
       id: 12,
@@ -142,9 +157,10 @@ export default function InstallApps() {
       size: '70 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
-        {
+    {
       id: 13,
       name: 'Maps',
       description: 'See Your Location',
@@ -152,9 +168,10 @@ export default function InstallApps() {
       size: '70 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
-        {
+    {
       id: 14,
       name: 'Mail',
       description: 'Send a mail',
@@ -162,7 +179,8 @@ export default function InstallApps() {
       size: '70 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 15,
@@ -172,7 +190,8 @@ export default function InstallApps() {
       size: '70 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 16,
@@ -182,7 +201,8 @@ export default function InstallApps() {
       size: '70 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 17,
@@ -192,7 +212,8 @@ export default function InstallApps() {
       size: '70 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     },
     {
       id: 18,
@@ -202,9 +223,9 @@ export default function InstallApps() {
       size: '100 MB',
       installed: false,
       installing: false,
-      progress: 0
+      progress: 0,
+      isSystemApp: false
     }
-
   ]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -255,10 +276,17 @@ export default function InstallApps() {
         // Load installed apps from backend
         if (data.desktopApps && data.desktopApps.length > 0) {
           setApps(prevApps =>
-            prevApps.map(app => ({
-              ...app,
-              installed: data.desktopApps.includes(app.name)
-            }))
+            prevApps.map(app => {
+              // System apps are always installed
+              if (app.isSystemApp) {
+                return { ...app, installed: true };
+              }
+              // Other apps depend on backend data
+              return {
+                ...app,
+                installed: data.desktopApps.includes(app.name)
+              };
+            })
           );
         }
         setHasUnsavedChanges(false);
@@ -333,6 +361,14 @@ export default function InstallApps() {
   };
 
   const handleInstall = (appId) => {
+    const app = apps.find(a => a.id === appId);
+    
+    // Prevent installing system apps (they're always installed)
+    if (app?.isSystemApp) {
+      showNotification('This is a system app and is always installed', 'info');
+      return;
+    }
+
     setApps(prevApps =>
       prevApps.map(app =>
         app.id === appId
@@ -368,6 +404,14 @@ export default function InstallApps() {
   };
 
   const handleUninstall = (appId) => {
+    const app = apps.find(a => a.id === appId);
+    
+    // Prevent uninstalling system apps
+    if (app?.isSystemApp) {
+      showNotification('System apps cannot be uninstalled', 'error');
+      return;
+    }
+
     setApps(prevApps =>
       prevApps.map(app =>
         app.id === appId
@@ -380,7 +424,7 @@ export default function InstallApps() {
 
   const handleInstallAll = () => {
     apps.forEach(app => {
-      if (!app.installed && !app.installing) {
+      if (!app.installed && !app.installing && !app.isSystemApp) {
         handleInstall(app.id);
       }
     });
@@ -388,12 +432,20 @@ export default function InstallApps() {
 
   const handleUninstallAll = () => {
     setApps(prevApps =>
-      prevApps.map(app => ({ ...app, installed: false, installing: false, progress: 0 }))
+      prevApps.map(app => {
+        // Keep system apps installed
+        if (app.isSystemApp) {
+          return app;
+        }
+        return { ...app, installed: false, installing: false, progress: 0 };
+      })
     );
     setHasUnsavedChanges(true);
+    showNotification('All non-system apps uninstalled. System apps remain installed.', 'info');
   };
 
   const installedCount = apps.filter(app => app.installed).length;
+  const systemAppsCount = apps.filter(app => app.isSystemApp).length;
 
   if (isLoading) {
     return (
@@ -480,19 +532,28 @@ export default function InstallApps() {
         </div>
 
         {/* Stats */}
-        <div className="mb-5 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-600">Installed Applications</p>
-              <p className="text-xl font-bold text-blue-600">{installedCount} / {apps.length}</p>
-              {installedAppsToSave.length > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Ready to save: {installedAppsToSave.join(', ')}
-                </p>
-              )}
+        <div className="mb-5 grid grid-cols-2 gap-4">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Total Installed</p>
+                <p className="text-xl font-bold text-blue-600">{installedCount} / {apps.length}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <Check className="w-5 h-5 text-blue-600" />
+              </div>
             </div>
-            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-              <Check className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">System Apps</p>
+                <p className="text-xl font-bold text-green-600">{systemAppsCount}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Always installed</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-green-600" />
+              </div>
             </div>
           </div>
         </div>
@@ -502,7 +563,11 @@ export default function InstallApps() {
           {apps.map((app) => (
             <div
               key={app.id}
-              className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all bg-white"
+              className={`border rounded-lg p-3 hover:shadow-md transition-all ${
+                app.isSystemApp 
+                  ? 'border-green-200 bg-green-50/30' 
+                  : 'border-gray-200 bg-white'
+              }`}
             >
               <div className="flex items-center gap-3">
                 {/* App Icon */}
@@ -525,8 +590,14 @@ export default function InstallApps() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="text-sm font-semibold text-gray-900">{app.name}</h3>
-                    {app.installed && !app.installing && (
+                    {app.isSystemApp && (
                       <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full flex items-center gap-1">
+                        <Lock className="w-3 h-3" />
+                        System
+                      </span>
+                    )}
+                    {app.installed && !app.installing && !app.isSystemApp && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full flex items-center gap-1">
                         <Check className="w-3 h-3" />
                         Installed
                       </span>
@@ -554,7 +625,16 @@ export default function InstallApps() {
 
                 {/* Action Button */}
                 <div className="flex-shrink-0">
-                  {app.installing ? (
+                  {app.isSystemApp ? (
+                    <button
+                      disabled
+                      className="px-4 py-1.5 bg-green-100 text-green-600 rounded-md font-medium text-sm cursor-not-allowed flex items-center gap-1.5 border border-green-200"
+                      title="System apps cannot be uninstalled"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      Protected
+                    </button>
+                  ) : app.installing ? (
                     <button
                       disabled
                       className="px-4 py-1.5 bg-gray-100 text-gray-400 rounded-md font-medium text-sm cursor-not-allowed flex items-center gap-1.5"
@@ -597,7 +677,7 @@ export default function InstallApps() {
             onClick={handleUninstallAll}
             className="px-5 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 hover:border-gray-400 transition font-medium text-sm"
           >
-            Uninstall All
+            Uninstall All (except System)
           </button>
           <button
             onClick={saveConfiguration}
