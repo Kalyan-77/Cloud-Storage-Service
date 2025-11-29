@@ -42,11 +42,10 @@ exports.register = async (req, res)=>{
 exports.login = async(req, res) =>{
     const {email, password} = req.body;
 
-    console.log(email ," , " , password);
+    console.log(req.body);
 
     try{
         const user = await Users.findOne({email});
-        console.log("Find User: " , user);
         if(!user){
             return res.status(400).json({message: 'Invalid Email or Password'});
         }

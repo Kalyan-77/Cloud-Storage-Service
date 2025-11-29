@@ -25,22 +25,21 @@ mongoose.connect(process.env.MONGO_URI, {
 // Determine environment
 const isProduction = process.env.NODE_ENV === 'production';
 
-// CORS configuration
-// const allowedOrigins = [
-//     'http://localhost:5173',
-//     'http://localhost:5174',
-//     'https://cloud-storage-service.vercel.app'
-// ];
+// Frontend origin (set this to your Vercel app URL in production)
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-// Middleware
+// When running behind a proxy (Render, etc.) express needs to trust the proxy
+if (isProduction) {
+    app.set('trust proxy', 1);
+}
+
+// CORS: allow only the frontend origin and enable credentials for cookies/sessions
 app.use(cors({
-    origin: true,
+    origin: FRONTEND_URL,
     credentials: true,
-    methods: "GET,POST,PUT,DELETE,PATCH,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization",
 }));
 
-app.options("*", cors());
+// app.options("*", cors());
 app.use(express.json());
 app.use(cookieParser());
 
@@ -55,11 +54,12 @@ app.use(session({
         touchAfter: 24 * 3600 // lazy session update (in seconds)
     }),
     cookie: {
-        httpOnly: true, 
-        secure: isProduction, // true in production, false in development
-        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site, 'lax' for same-site
+        httpOnly: true,
+        secure: isProduction, // true in production (requires HTTPS)
+        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site cookies
         maxAge: 1000 * 60 * 60 * 24, // 1 day
-        domain: isProduction ? '.onrender.com' : undefined // allow cross-subdomain in production
+        // Optional: set cookie domain via env if needed (e.g. '.yourdomain.com')
+        domain: process.env.SESSION_COOKIE_DOMAIN || undefined,
     },
     proxy: isProduction // trust proxy in production
 }));
