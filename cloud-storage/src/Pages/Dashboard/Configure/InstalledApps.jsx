@@ -20,6 +20,7 @@ import mail from '../../../assets/Apps/mail.png';
 import music from '../../../assets/Apps/music.png';
 import reminders from '../../../assets/Apps/reminders.png';
 import vlc from '../../../assets/Apps/vlc.png';
+import videoPlayer from '../../../assets/Apps/TV.jpg';
 
 export default function InstallApps() {
   const { user } = useAuth();
@@ -220,6 +221,17 @@ export default function InstallApps() {
       name: 'VLC',
       description: 'Enjoy with Videos or Movies in VLC',
       icon: vlc,
+      size: '100 MB',
+      installed: false,
+      installing: false,
+      progress: 0,
+      isSystemApp: false
+    },
+    {
+      id: 19,
+      name: 'Video Player',
+      description: 'Enjoy with Videos or Movies in TV',
+      icon: videoPlayer,
       size: '100 MB',
       installed: false,
       installing: false,

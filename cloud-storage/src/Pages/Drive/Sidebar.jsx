@@ -10,13 +10,16 @@ import {
   FaStar,
   FaCloud,
   FaChevronDown,
-  FaPlus
+  FaPlus,
+  FaBars,
+  FaTimes
 } from "react-icons/fa";
 import { BASE_URL } from '../../../config';
 
 const Sidebar = () => {
   const location = useLocation();
   const [isStorageExpanded, setIsStorageExpanded] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [storageData, setStorageData] = useState({
@@ -72,6 +75,23 @@ const Sidebar = () => {
     fetchFiles();
   }, []);
 
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isMobileMenuOpen]);
+
   const handleUploadClick = () => {
     if (fileInputRef.current) fileInputRef.current.click();
   };
@@ -90,14 +110,13 @@ const Sidebar = () => {
         body: formData,
         credentials: 'include'
       });
-      // Refresh files and storage data after upload
       fetchFiles();
       fetchStorageData();
     } catch (err) {
       console.error('Error Uploading File:', err);
     } finally {
       setLoading(false);
-      e.target.value = null; // Reset input
+      e.target.value = null;
     }
   };
 
@@ -147,14 +166,17 @@ const Sidebar = () => {
     { id: 'trash', icon: FaTrash, label: 'Trash', path: '/dashboard/cloud/bin' },
   ];
 
-  return (
-    <div className="fixed top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 flex flex-col shadow-sm">
+  const SidebarContent = () => (
+    <>
       {/* Logo Section */}
       <div className="p-6 border-b border-gray-100">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
             <FaCloud className="text-white text-lg" />
           </div>
+          <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Cloud Drive
+          </span>
         </div>
       </div>
 
@@ -163,7 +185,7 @@ const Sidebar = () => {
         <button
           onClick={handleUploadClick}
           disabled={loading}
-          className="w-full bg-blue-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 px-4 rounded-xl flex items-center gap-3 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl flex items-center justify-center gap-3 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FaPlus className="text-sm" />
           <span className="font-medium">{loading ? 'Uploading...' : 'New Upload'}</span>
@@ -259,18 +281,6 @@ const Sidebar = () => {
                   <span className="ml-1">({getStoragePercentage().toFixed(1)}%)</span>
                 )}
               </div>
-              
-              {/* Additional Storage Details */}
-                {/* <div className="text-xs text-gray-500 space-y-1">
-                  <div className="flex justify-between">
-                    <span>Drive Files:</span>
-                    <span>{storageData.usageInDrive}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Drive Trash:</span>
-                    <span>{storageData.usageInDriveTrash}</span>
-                  </div>
-                </div> */}
             </>
           )}
           
@@ -297,7 +307,46 @@ const Sidebar = () => {
           <span className="font-medium">Settings</span>
         </Link>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile Menu Button - Fixed at top */}
+      <button
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-white rounded-xl shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+        aria-label="Toggle menu"
+      >
+        {isMobileMenuOpen ? (
+          <FaTimes className="text-gray-700 text-xl" />
+        ) : (
+          <FaBars className="text-gray-700 text-xl" />
+        )}
+      </button>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Desktop Sidebar - Hidden on mobile */}
+      <div className="hidden lg:flex fixed top-0 left-0 h-screen w-72 bg-white border-r border-gray-200 flex-col shadow-sm z-30">
+        <SidebarContent />
+      </div>
+
+      {/* Mobile Sidebar - Slides in from left */}
+      <div
+        className={`lg:hidden fixed top-0 left-0 h-screen w-80 max-w-[85vw] bg-white border-r border-gray-200 flex flex-col shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <SidebarContent />
+      </div>
+    </>
   );
 };
 

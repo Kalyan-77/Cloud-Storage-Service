@@ -146,7 +146,7 @@ const ConfigSidebar = () => {
           {/* Footer */}
           <div className="px-4 sm:px-8 py-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
             <p className="text-xs text-gray-500 text-center">
-              Last updated: {new Date().toLocaleDateString()} • Version 2.4.1
+              Last updated: {new Date().toLocaleDateString()} • Version 2.4.2
             </p>
           </div>
         </div>

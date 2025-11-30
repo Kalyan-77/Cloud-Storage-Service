@@ -118,7 +118,7 @@ export default function CloudStorageNavbar() {
     e.preventDefault();
     
     setIsLoadingMacEnvironment(true);
-    setCountdown(10);
+    setCountdown(5);
     
     const countdownInterval = setInterval(() => {
       setCountdown((prev) => {
@@ -141,7 +141,7 @@ export default function CloudStorageNavbar() {
               'left=0',
               'top=0'
             ].join(',');
-            const newWindow = window.open('https://mac-os-woad.vercel.app', '_blank', windowFeatures);
+            const newWindow = window.open('https://mac-os-woad.vercel.app', '_blank', windowFeatures); 
             
             if (newWindow) {
               newWindow.focus();
