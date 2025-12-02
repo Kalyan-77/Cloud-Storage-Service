@@ -7,6 +7,8 @@ import Profile from '../Pages/Dashboard/Profile';
 import Cloud from './CloudPage';
 import { BASE_URL } from '../../config';
 import ConfigPage from './ConfigPage';
+import loadingGif from '../assets/loading.gif';
+import StorageTracking from '../Pages/Dashboard/StorageTracking';
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,16 @@ const Dashboard = () => {
   }, [navigate]);
 
   if(loading){
-    return <div className="flex justify-center items-center h-screen">Loading....</div>
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gray-50">
+        <img 
+          src={loadingGif}
+          alt="Loading..." 
+          className="w-44 h-44 mb-4"
+        />
+        <p className="text-gray-600 text-lg">Loading...</p>
+      </div>
+    );
   }
 
   if(!isLoggedIn){
@@ -53,6 +64,7 @@ const Dashboard = () => {
           <Route path="/configure/*" element={<ConfigPage />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/cloud/*" element={<Cloud />} />
+          <Route path='/storagetracking' element={<StorageTracking/>} />
         </Routes>
       </main>
     </div>

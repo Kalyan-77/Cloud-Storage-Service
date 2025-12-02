@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../Context/AuthContext';
 import { BASE_URL } from '../../config';
 
 const Login = () => {
@@ -12,7 +13,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-
+  const { setUser, refreshUser } = useAuth();
   console.log("BASE_URL : " , BASE_URL);
   
 
@@ -35,8 +36,16 @@ const Login = () => {
         setMsg(data.message || 'Login Successful...');
         setEmail('');
         setPassword('');
-        
-        // Navigate to hero page
+
+        // Refresh global auth context so navbar updates immediately
+        try {
+          if (refreshUser) await refreshUser();
+        } catch (err) {
+          // fallback: set user directly if refresh fails and user returned
+          if (data && data.user) setUser(data.user);
+        }
+
+        // Navigate to dashboard
         navigate('/dashboardHome');
       } else {
         setErrors(data.message || 'Invalid credentials');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, HardDrive, FileText, RotateCcw, BarChart3, Trash2, File, RefreshCw } from 'lucide-react';
+import { Upload, HardDrive, FileText, RotateCcw, BarChart3, Trash2, File, RefreshCw, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../Context/AuthContext';
 import { BASE_URL } from '../../../config';
@@ -24,37 +24,47 @@ const Dashboard = () => {
       icon: <Upload className="w-8 h-8 text-gray-600" />,
       title: 'Uploads',
       description: 'Upload Your files and download',
-      path: '/dashboard/cloud'
+      path: '/dashboard/cloud',
+      enabled: true
     },
     {
       icon: <HardDrive className="w-8 h-8 text-gray-600" />,
       title: 'Storage Bucket',
       description: 'Store Your Website Data',
-      path: '/dashboard/cloud'
+      path: '/dashboard/cloud',
+      enabled: false,
+      comingSoon: true
     },
     {
       icon: <FileText className="w-8 h-8 text-gray-600" />,
       title: 'File Types',
       description: 'Role based File Organization(pptx,pdf,word, etc...)',
-      path: '/dashboard/configure'
+      path: '/dashboard/configure',
+      enabled: false,
+      comingSoon: true
     },
     {
       icon: <RotateCcw className="w-8 h-8 text-gray-600" />,
       title: 'File Versioning',
       description: 'Keep track of changes and restore older versions.',
-      path: '/dashboard/cloud'
+      path: '/dashboard/cloud',
+      enabled: false,
+      comingSoon: true
     },
     {
       icon: <BarChart3 className="w-8 h-8 text-gray-600" />,
       title: 'Storage Progress Tracking',
       description: 'Visual display of used vs. available storage.',
-      path: '/dashboard/profile'
+      path: '/dashboard/storagetracking',
+      enabled: true
     },
     {
       icon: <Trash2 className="w-8 h-8 text-gray-600" />,
       title: 'File Management',
       description: 'Organize and delete your stored files.',
-      path: '/dashboard/cloud/bin'
+      path: '/dashboard/cloud/bin',
+      enabled: false,
+      comingSoon: true
     }
   ];
 
@@ -124,8 +134,10 @@ const Dashboard = () => {
     }
   };
 
-  const handleServiceClick = (path) => {
-    navigate(path);
+  const handleServiceClick = (service) => {
+    if (service.enabled) {
+      navigate(service.path);
+    }
   };
 
   const parseStorage = (storageStr) => {
@@ -183,21 +195,49 @@ const Dashboard = () => {
             {services.map((service, index) => (
               <div 
                 key={index}
-                onClick={() => handleServiceClick(service.path)}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md hover:scale-105 transition-all duration-200 cursor-pointer group"
+                onClick={() => handleServiceClick(service)}
+                className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all duration-200 relative
+                  ${service.enabled 
+                    ? 'hover:shadow-md hover:scale-105 cursor-pointer group' 
+                    : 'opacity-60 cursor-not-allowed'
+                  }`}
               >
+                {/* Coming Soon Badge */}
+                {service.comingSoon && (
+                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-1 rounded-full">
+                    <Lock className="w-3 h-3" />
+                    Coming Soon
+                  </div>
+                )}
+
                 <div className="flex flex-col items-start space-y-4">
-                  <div className="p-3 bg-gray-50 rounded-lg group-hover:bg-blue-50 transition-colors duration-200">
-                    <div className="group-hover:text-blue-600 transition-colors duration-200">
+                  <div className={`p-3 rounded-lg transition-colors duration-200 ${
+                    service.enabled 
+                      ? 'bg-gray-50 group-hover:bg-blue-50' 
+                      : 'bg-gray-100'
+                  }`}>
+                    <div className={`transition-colors duration-200 ${
+                      service.enabled 
+                        ? 'group-hover:text-blue-600' 
+                        : 'text-gray-400'
+                    }`}>
                       {service.icon}
                     </div>
                   </div>
                   
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
+                    <h3 className={`text-lg font-semibold mb-2 transition-colors duration-200 ${
+                      service.enabled 
+                        ? 'text-gray-900 group-hover:text-blue-600' 
+                        : 'text-gray-500'
+                    }`}>
                       {service.title}
                     </h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
+                    <p className={`text-sm leading-relaxed ${
+                      service.enabled 
+                        ? 'text-gray-600' 
+                        : 'text-gray-400'
+                    }`}>
                       {service.description}
                     </p>
                   </div>
