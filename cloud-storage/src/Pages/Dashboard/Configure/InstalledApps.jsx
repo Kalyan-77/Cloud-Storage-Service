@@ -180,8 +180,8 @@ export default function InstallApps() {
   const getAppIcon = (icon) => {
     if (!icon) return '📱';
     
-    if (icon.startsWith('/AppIcons/') || icon.startsWith('/')) {
-      const imagePath = `/src/assets/Apps${icon}`;
+    if (icon.startsWith('/Apps/') || icon.startsWith('/')) {
+      const imagePath = `/src/assets/Apps/${icon}`;
       return (
         <img 
           src={imagePath}
