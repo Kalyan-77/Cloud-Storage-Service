@@ -178,44 +178,48 @@ export default function InstallApps() {
 
   // Helper function to get icon (either emoji or image URL)
   const getAppIcon = (icon) => {
-    if (!icon) return '📱';
+  if (!icon) return '📱';
+  
+  // If icon starts with / (like /finder.png from DB)
+  if (icon.startsWith('/') && !icon.startsWith('http')) {
+    // Prepend /Apps/ to match the public folder structure
+    const imagePath = `/Apps${icon}`;
     
-    if (icon.startsWith('/Apps/') || icon.startsWith('/')) {
-      const imagePath = `/src/assets/Apps${icon}`;
-      console.log("Image path: " , imagePath);
-      return (
-        <img 
-          src={imagePath}
-          alt="App Icon" 
-          className="w-9 h-9 object-contain"
-          onError={(e) => {
-            e.target.style.display = 'none';
-            const parent = e.target.parentElement;
-            parent.innerHTML = '📱';
-            parent.classList.add('text-3xl');
-          }}
-        />
-      );
-    }
-    
-    if (icon.startsWith('http')) {
-      return (
-        <img 
-          src={icon} 
-          alt="App Icon" 
-          className="w-9 h-9 object-contain"
-          onError={(e) => {
-            e.target.style.display = 'none';
-            const parent = e.target.parentElement;
-            parent.innerHTML = '📱';
-            parent.classList.add('text-3xl');
-          }}
-        />
-      );
-    }
-    
-    return <span className="text-3xl">{icon}</span>;
-  };
+    return (
+      <img 
+        src={imagePath}
+        alt="App Icon" 
+        className="w-9 h-9 object-contain"
+        onError={(e) => {
+          e.target.style.display = 'none';
+          const parent = e.target.parentElement;
+          parent.innerHTML = '📱';
+          parent.classList.add('text-3xl');
+        }}
+      />
+    );
+  }
+  
+  // Handle HTTP URLs
+  if (icon.startsWith('http')) {
+    return (
+      <img 
+        src={icon} 
+        alt="App Icon" 
+        className="w-9 h-9 object-contain"
+        onError={(e) => {
+          e.target.style.display = 'none';
+          const parent = e.target.parentElement;
+          parent.innerHTML = '📱';
+          parent.classList.add('text-3xl');
+        }}
+      />
+    );
+  }
+  
+  // Return emoji if it's not a path
+  return <span className="text-3xl">{icon}</span>;
+};
 
   const handleInstall = (appId) => {
     const app = apps.find(a => a.id === appId);
