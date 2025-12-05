@@ -10,6 +10,7 @@ const auth = require('./Routes/authRoutes');
 const googledrive = require('./Routes/authGoogleDrive');
 const finder = require('./Routes/authFinder');
 const configRoutes  = require('./Routes/configRoutes');
+const Apps = require('./Routes/appRoutes');
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use('/auth', auth);
 app.use('/cloud', googledrive);
 app.use('/finder', finder);
 app.use('/config', configRoutes);
+app.use('/apps',Apps);
 
 const port = process.env.PORT || 5000;
 app.listen(port, () => {

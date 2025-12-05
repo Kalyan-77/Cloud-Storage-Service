@@ -141,7 +141,7 @@ export default function CloudStorageNavbar() {
               'left=0',
               'top=0'
             ].join(',');
-            const newWindow = window.open('https://mac-os-woad.vercel.app', '_blank', windowFeatures); 
+            const newWindow = window.open(' http://localhost:5173/', '_blank', windowFeatures);  // http://localhost:5173/
             
             if (newWindow) {
               newWindow.focus();
