@@ -181,7 +181,8 @@ export default function InstallApps() {
     if (!icon) return '📱';
     
     if (icon.startsWith('/Apps/') || icon.startsWith('/')) {
-      const imagePath = `/src/assets/Apps/${icon}`;
+      const imagePath = `/src/assets/Apps${icon}`;
+      console.log("Image path: " , imagePath);
       return (
         <img 
           src={imagePath}
