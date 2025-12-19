@@ -25,6 +25,17 @@ const messageSchema = new mongoose.Schema({
     name: String,
     mimeType: String,
     size: Number
+  },
+
+  /* 🔥 DELETE LOGIC */
+  deletedFor: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Users"
+  }],
+
+  deletedForEveryone: {
+    type: Boolean,
+    default: false
   }
 
 }, { timestamps: true });

@@ -8,6 +8,7 @@ import Cloud from './Components/CloudPage';
 import Dashboard from './Components/Dashboard';
 import Apps from './Apps';
 import ForgetPassword from './Auth/forgetPassword';
+import Profile from './display';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
 
           <Route path="/*" element={<HeroPage />} />
           <Route path="/lists" element={<Apps/>} />
+          <Route path='/whatsappProfile' element={<Profile/>}/>
           
         </Routes>
       </Router>

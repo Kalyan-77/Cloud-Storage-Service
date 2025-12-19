@@ -14,7 +14,15 @@ const UserSchema = new mongoose.Schema({
     password: {
         type: String,
         required: true
-    }
+    },
+    avatar: {
+    type: String,
+    default: "" // image URL
+  },
+  about: {
+    type: String,
+    default: "Hey there! I am using Chat"
+  }
 },{timestamps: true});
 
 module.exports = mongoose.model('Users',UserSchema);
