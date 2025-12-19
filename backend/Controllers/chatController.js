@@ -6,7 +6,7 @@ const Users = require("../Models/Users");
 exports.getUsers = async (req, res) => {
   const users = await Users.find({
     _id: { $ne: req.session.user._id }
-  }).select("_id name email");
+  }).select("_id name email avatar about");
 
   res.json(users);
 };
@@ -32,7 +32,7 @@ exports.getOrCreateRoom = async (req, res) => {
 // Get messages - 🔥 FIX: Populate sender info
 exports.getMessages = async (req, res) => {
   const messages = await Message.find({ roomId: req.params.roomId })
-    .populate("sender", "name email")
+    .populate("sender", "name email avatar")
     .sort({ createdAt: 1 }); // Sort by oldest first
 
   res.json(messages);
@@ -69,7 +69,7 @@ exports.sendFileMessage = async (req, res) => {
   });
 
   // ✅ Populate sender info
-  await message.populate("sender", "name email");
+  await message.populate("sender", "name email avatar");
 
   // ✅ FIX: Get all sockets in the room and emit to others (not uploader)
   const io = req.app.get("io");
@@ -86,4 +86,54 @@ exports.sendFileMessage = async (req, res) => {
 
   // Send populated message back to uploader
   res.json(message);
+};
+
+exports.deleteMessageForMe = async (req, res) => {
+  const { messageId } = req.params;
+  const userId = req.session.user._id;
+
+  await Message.findByIdAndUpdate(
+    messageId,
+    { $addToSet: { deletedFor: userId } }
+  );
+
+  res.json({ success: true });
+};
+
+exports.deleteMessageForEveryone = async (req, res) => {
+  const { messageId } = req.params;
+  const userId = req.session.user._id;
+
+  const message = await Message.findById(messageId);
+
+  if (!message) {
+    return res.status(404).json({ message: "Message not found" });
+  }
+
+  if (message.sender.toString() !== userId.toString()) {
+    return res.status(403).json({ message: "Not allowed" });
+  }
+
+  message.deletedForEveryone = true;
+  await message.save();
+
+  // 🔥 Real-time update
+  req.app.get("io").to(message.roomId.toString()).emit(
+    "message-deleted",
+    { messageId }
+  );
+
+  res.json({ success: true });
+};
+
+exports.deleteChatForMe = async (req, res) => {
+  const { roomId } = req.params;
+  const userId = req.session.user._id;
+
+  await Message.updateMany(
+    { roomId },
+    { $addToSet: { deletedFor: userId } }
+  );
+
+  res.json({ success: true });
 };

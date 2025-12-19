@@ -14,4 +14,16 @@ router.post(
   chat.sendFileMessage
 );
 
+router.delete(
+  "/message/me/:messageId",
+  chat.deleteMessageForMe
+);
+
+router.delete(
+  "/message/everyone/:messageId",
+  chat.deleteMessageForEveryone
+);
+
+router.delete("/chat/me/:roomId", chat.deleteChatForMe);
+
 module.exports = router;

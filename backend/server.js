@@ -10,13 +10,13 @@ const { Server } = require("socket.io");
 const path = require("path");
 
 // Routes
-const geminiRoutes = require("./Routes/geminiRoutes");
 const auth = require('./Routes/authRoutes');
 const googledrive = require('./Routes/authGoogleDrive');
 const finder = require('./Routes/authFinder');
 const configRoutes  = require('./Routes/configRoutes');
 const Apps = require('./Routes/appRoutes');
 const chatRoutes = require("./Routes/chatRoutes");
+const profileRoutes = require("./Routes/profileRoutes");
 
 // Models
 const Message = require("./Models/Message");
@@ -83,8 +83,8 @@ app.use('/cloud', googledrive);
 app.use('/finder', finder);
 app.use('/config', configRoutes);
 app.use('/apps', Apps);
-app.use('/gemini', geminiRoutes);
 app.use('/chat', chatRoutes);
+app.use("/profile", profileRoutes);
 
 /* ======================= HTTP + SOCKET ======================= */
 const server = http.createServer(app);

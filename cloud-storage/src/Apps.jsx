@@ -12,7 +12,14 @@ const socket = io(BACKEND_URL, {
 });
 
 export default function Chat() {
-  /* ================= STATE ================= */
+  /* ================= PROFILE STATE ================= */
+  const [showProfile, setShowProfile] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [profileName, setProfileName] = useState("");
+  const [profileAbout, setProfileAbout] = useState("");
+  const [profileFile, setProfileFile] = useState(null);
+
+  /* ================= CHAT STATE ================= */
   const [me, setMe] = useState(null);
   const [users, setUsers] = useState([]);
   const [roomId, setRoomId] = useState(null);
@@ -28,21 +35,30 @@ export default function Chat() {
           `${BACKEND_URL}/auth/checkSession`,
           { withCredentials: true }
         );
-
-        console.log("SESSION RESPONSE:", res.data);
-
-        if (res.data.loggedIn) {
-          setMe(res.data.user);
-        }
+        if (res.data.loggedIn) setMe(res.data.user);
       } catch (err) {
         console.error("Session fetch failed", err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchSession();
   }, []);
+
+  /* ================= FETCH PROFILE ================= */
+  useEffect(() => {
+    if (!me) return;
+
+    axios.get(`${BACKEND_URL}/profile/me`, {
+      withCredentials: true
+    })
+    .then(res => {
+      setProfile(res.data);
+      setProfileName(res.data.name);
+      setProfileAbout(res.data.about || "");
+    })
+    .catch(err => console.error("Profile fetch error", err));
+  }, [me]);
 
   /* ================= GET USER LIST ================= */
   useEffect(() => {
@@ -57,189 +73,249 @@ export default function Chat() {
 
   /* ================= SOCKET RECEIVE ================= */
   useEffect(() => {
-    socket.on("receive-message", (msg) => {
-      console.log("MESSAGE RECEIVED:", msg);
+    socket.on("receive-message", msg => {
       setMessages(prev => [...prev, msg]);
     });
 
-    return () => socket.off("receive-message");
+    socket.on("message-deleted", ({ messageId }) => {
+      setMessages(prev =>
+        prev.map(m =>
+          m._id === messageId
+            ? { ...m, deletedForEveryone: true }
+            : m
+        )
+      );
+    });
+
+    return () => {
+      socket.off("receive-message");
+      socket.off("message-deleted");
+    };
   }, []);
+
+  /* ================= ALWAYS JOIN ROOM ================= */
+  useEffect(() => {
+    if (roomId) socket.emit("join-room", roomId);
+  }, [roomId]);
+
+  /* ================= SAVE PROFILE ================= */
+  const saveProfile = async () => {
+    const form = new FormData();
+    form.append("name", profileName);
+    form.append("about", profileAbout);
+    if (profileFile) form.append("avatar", profileFile);
+
+    const res = await axios.put(
+      `${BACKEND_URL}/profile/update`,
+      form,
+      { withCredentials: true }
+    );
+
+    setProfile(res.data);
+    setMe(res.data);
+    setShowProfile(false);
+  };
 
   /* ================= OPEN CHAT ================= */
   const openChat = async (otherUserId) => {
-    try {
-      const res = await axios.post(
-        `${BACKEND_URL}/chat/room`,
-        { otherUserId },
-        { withCredentials: true }
-      );
+    const res = await axios.post(
+      `${BACKEND_URL}/chat/room`,
+      { otherUserId },
+      { withCredentials: true }
+    );
 
-      const room = res.data._id;
-      setRoomId(room);
+    setRoomId(res.data._id);
 
-      socket.emit("join-room", room);
+    const msgs = await axios.get(
+      `${BACKEND_URL}/chat/messages/${res.data._id}`,
+      { withCredentials: true }
+    );
 
-      const msgs = await axios.get(
-        `${BACKEND_URL}/chat/messages/${room}`,
-        { withCredentials: true }
-      );
-
-      setMessages(msgs.data);
-    } catch (err) {
-      console.error("Open chat error", err);
-    }
+    setMessages(msgs.data);
   };
 
   /* ================= SEND TEXT ================= */
   const sendMessage = () => {
     if (!roomId || !text.trim()) return;
-
-    socket.emit("send-message", {
-      roomId,
-      text
-    });
-
+    socket.emit("send-message", { roomId, text });
     setText("");
   };
 
   /* ================= SEND FILE ================= */
   const sendFile = async (file) => {
     if (!file || !roomId) return;
-
     const form = new FormData();
     form.append("file", file);
     form.append("roomId", roomId);
+    await axios.post(`${BACKEND_URL}/chat/upload`, form, {
+      withCredentials: true
+    });
+  };
 
-    try {
-      await axios.post(
-        `${BACKEND_URL}/chat/upload`,
-        form,
-        { withCredentials: true }
-      );
-    } catch (err) {
-      console.error("File upload error", err);
-    }
+  /* ================= DELETE MESSAGE ================= */
+  const deleteForMe = async (id) => {
+    await axios.delete(`${BACKEND_URL}/chat/message/me/${id}`, {
+      withCredentials: true
+    });
+    setMessages(prev => prev.filter(m => m._id !== id));
+  };
+
+  const deleteForEveryone = async (id) => {
+    await axios.delete(`${BACKEND_URL}/chat/message/everyone/${id}`, {
+      withCredentials: true
+    });
+  };
+
+  /* ================= DELETE CHAT ================= */
+  const deleteChat = async () => {
+    if (!roomId) return;
+    await axios.delete(`${BACKEND_URL}/chat/chat/me/${roomId}`, {
+      withCredentials: true
+    });
+    setMessages([]);
+    setRoomId(null);
   };
 
   /* ================= UI STATES ================= */
-  if (loading) {
-    return (
-      <div className="p-6 text-lg">
-        Loading user session...
-      </div>
-    );
-  }
-
-  if (!me) {
-    return (
-      <div className="p-6 text-red-600">
-        ❌ User not logged in
-      </div>
-    );
-  }
+  if (loading) return <div className="p-6">Loading...</div>;
+  if (!me) return <div className="p-6 text-red-600">Login required</div>;
 
   /* ================= RENDER ================= */
   return (
-    <div className="flex h-screen font-sans">
+    <div className="flex h-screen font-sans relative">
 
-      {/* ================= USERS ================= */}
+      {/* PROFILE PANEL */}
+      {showProfile && profile && (
+        <div className="absolute inset-0 bg-white z-50 flex">
+          <div className="w-1/3 border-r p-6">
+            <h2 className="font-bold text-lg mb-4">My Profile</h2>
+
+            <img
+              src={profile.avatar ? `${BACKEND_URL}${profile.avatar}` : "https://via.placeholder.com/120"}
+              className="w-28 h-28 rounded-full mb-3"
+            />
+
+            <input type="file" onChange={e => setProfileFile(e.target.files[0])} />
+
+            <button
+              onClick={() => setShowProfile(false)}
+              className="mt-4 text-gray-600"
+            >
+              ← Back
+            </button>
+          </div>
+
+          <div className="flex-1 p-6">
+            <label>Name</label>
+            <input
+              value={profileName}
+              onChange={e => setProfileName(e.target.value)}
+              className="w-full border p-2 mb-4"
+            />
+
+            <label>About</label>
+            <textarea
+              value={profileAbout}
+              onChange={e => setProfileAbout(e.target.value)}
+              className="w-full border p-2 mb-4"
+            />
+
+            <label>Email</label>
+            <input
+              value={profile.email}
+              disabled
+              className="w-full border p-2 bg-gray-100 mb-4"
+            />
+
+            <button
+              onClick={saveProfile}
+              className="bg-green-600 text-white px-6 py-2 rounded"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* USERS */}
       <div className="w-1/4 border-r bg-gray-100 p-4">
-        <h2 className="font-bold mb-3">Chats</h2>
+        <h2 className="font-bold mb-3 flex justify-between">
+          Chats
+          <button
+            onClick={() => setShowProfile(true)}
+            className="text-blue-600 text-sm"
+          >
+            My Profile
+          </button>
+        </h2>
 
-        {users.length === 0 && (
-          <p className="text-sm text-gray-500">
-            No users found
-          </p>
+        {roomId && (
+          <button onClick={deleteChat} className="text-red-600 text-sm mb-2">
+            Delete Chat
+          </button>
         )}
 
         {users.map(u => (
           <div
             key={u._id}
             onClick={() => openChat(u._id)}
-            className="p-2 mb-1 rounded cursor-pointer hover:bg-gray-300"
+            className="p-2 rounded cursor-pointer hover:bg-gray-300"
           >
             {u.name}
           </div>
         ))}
       </div>
 
-      {/* ================= CHAT ================= */}
+      {/* CHAT */}
       <div className="flex flex-col w-3/4">
-
-        {/* Messages */}
         <div className="flex-1 p-4 overflow-y-auto bg-white">
-          {!roomId && (
-            <p className="text-gray-500">
-              Select a user to start chatting
-            </p>
-          )}
+          {!roomId && <p>Select a user to start chatting</p>}
 
-          {messages.map((m, i) => (
-            <div key={i} className="mb-2">
+          {messages.map(m => (
+            <div
+              key={m._id}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                const c = window.prompt("1 = Delete for me\n2 = Delete for everyone");
+                if (c === "1") deleteForMe(m._id);
+                if (c === "2" && m.sender?._id === me._id) deleteForEveryone(m._id);
+              }}
+            >
               <b>{m.sender?.name === me.name ? "You" : m.sender?.name}:</b>
 
-              {m.type === "text" && (
-                <span> {m.text}</span>
-              )}
-
-              {m.type === "image" && (
-                <img
-                  src={`${BACKEND_URL}${m.file.url}`}
-                  alt=""
-                  className="mt-1 max-w-xs"
-                />
-              )}
-
-              {m.type === "video" && (
-                <video
-                  controls
-                  className="mt-1 max-w-xs"
-                  src={`${BACKEND_URL}${m.file.url}`}
-                />
-              )}
-
-              {m.type === "audio" && (
-                <audio
-                  controls
-                  src={`${BACKEND_URL}${m.file.url}`}
-                />
-              )}
-
-              {m.type === "file" && (
-                <a
-                  href={`${BACKEND_URL}${m.file.url}`}
-                  download
-                  className="text-blue-600 underline ml-2"
-                >
-                  {m.file.name}
-                </a>
+              {m.deletedForEveryone ? (
+                <i className="ml-2 text-gray-500">Message deleted</i>
+              ) : (
+                <>
+                  {m.type === "text" && <span> {m.text}</span>}
+                  {m.type === "image" && <img src={`${BACKEND_URL}${m.file.url}`} className="max-w-xs mt-1" />}
+                  {m.type === "video" && <video controls src={`${BACKEND_URL}${m.file.url}`} className="max-w-xs mt-1" />}
+                  {m.type === "audio" && <audio controls src={`${BACKEND_URL}${m.file.url}`} />}
+                  {m.type === "file" && (
+                    <a href={`${BACKEND_URL}${m.file.url}`} download className="text-blue-600 ml-2">
+                      {m.file.name}
+                    </a>
+                  )}
+                </>
               )}
             </div>
           ))}
         </div>
 
-        {/* Input */}
         <div className="p-3 border-t flex gap-2">
           <input
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={e => setText(e.target.value)}
             className="flex-1 border p-2"
             placeholder="Type a message..."
           />
 
-          <input
-            type="file"
-            onChange={(e) => sendFile(e.target.files[0])}
-          />
+          <input type="file" onChange={e => sendFile(e.target.files[0])} />
 
-          <button
-            onClick={sendMessage}
-            className="bg-green-600 text-white px-4"
-          >
+          <button onClick={sendMessage} className="bg-green-600 text-white px-4">
             Send
           </button>
         </div>
-
       </div>
     </div>
   );
