@@ -9,6 +9,7 @@ import { BASE_URL } from '../../config';
 import ConfigPage from './ConfigPage';
 import loadingGif from '../assets/loading.gif';
 import StorageTracking from '../Pages/Dashboard/StorageTracking';
+import Settings from '../Pages/Dashboard/Settings';
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -65,6 +66,7 @@ const Dashboard = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/cloud/*" element={<Cloud />} />
           <Route path='/storagetracking' element={<StorageTracking/>} />
+          <Route path='/settings' element={<Settings/>}/>
         </Routes>
       </main>
     </div>
