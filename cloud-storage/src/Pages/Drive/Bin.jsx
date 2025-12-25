@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { 
   Trash2, RotateCcw, Download, Eye, AlertCircle, Clock, 
   FileText, Image, Video, Music, Archive, File, Search,
-  RefreshCw, CheckCircle2, Circle, MoreVertical, X
+  RefreshCw, CheckCircle2, Circle, X
 } from 'lucide-react';
+
 import { BASE_URL } from '../../../config';
 
 const Bin = () => {
@@ -63,7 +64,6 @@ const Bin = () => {
       showNotification('File restored successfully!');
       fetchFiles();
       
-      // Remove from selected files if it was selected
       setSelectedFiles(prev => {
         const newSet = new Set(prev);
         newSet.delete(fileId);
@@ -87,7 +87,6 @@ const Bin = () => {
       showNotification('File deleted permanently');
       fetchFiles();
       
-      // Remove from selected files if it was selected
       setSelectedFiles(prev => {
         const newSet = new Set(prev);
         newSet.delete(fileId);
@@ -114,14 +113,15 @@ const Bin = () => {
   const handleBulkDelete = async () => {
     if (selectedFiles.size === 0) return;
     
-    if (!window.confirm(`Are you sure you want to permanently delete ${selectedFiles.size} files? This action cannot be undone.`)) {
-      return;
-    }
-    
+    setShowDeleteConfirm({ isBulk: true, count: selectedFiles.size });
+  };
+
+  const confirmBulkDelete = async () => {
     try {
       await Promise.all(Array.from(selectedFiles).map(fileId => deleteFilePermanently(fileId)));
       setSelectedFiles(new Set());
       showNotification(`${selectedFiles.size} files deleted permanently`);
+      setShowDeleteConfirm(null);
     } catch (error) {
       showNotification('Some files failed to delete', 'error');
     }
@@ -145,7 +145,7 @@ const Bin = () => {
     } else {
       setSelectedFiles(new Set(filteredFiles.map(f => f.id)));
     }
-  }, [selectedFiles.size, files]);
+  }, [selectedFiles.size]);
 
   // Get file icon based on extension
   const getFileIcon = useCallback((fileName, mimeType) => {
@@ -204,7 +204,7 @@ const Bin = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Notification */}
+      {/* Notification Toast */}
       {notification.show && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border flex items-center space-x-2 transition-all duration-300 ${
           notification.type === 'success' 
@@ -216,6 +216,79 @@ const Bin = () => {
             <AlertCircle className="w-5 h-5" />
           }
           <span className="font-medium">{notification.message}</span>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <AlertCircle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Delete Permanently</h3>
+                  <p className="text-sm text-gray-500">This action cannot be undone</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-800 flex items-start">
+                  <AlertCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                  <span>
+                    {showDeleteConfirm.isBulk 
+                      ? `You are about to permanently delete ${showDeleteConfirm.count} ${showDeleteConfirm.count === 1 ? 'file' : 'files'}. This action cannot be undone.`
+                      : `You are about to permanently delete this file. This action cannot be undone.`
+                    }
+                  </span>
+                </p>
+              </div>
+
+              <p className="text-gray-700">
+                {showDeleteConfirm.isBulk ? (
+                  <>Are you sure you want to permanently delete <strong>{showDeleteConfirm.count}</strong> selected {showDeleteConfirm.count === 1 ? 'file' : 'files'}?</>
+                ) : (
+                  <>Are you sure you want to permanently delete "<strong>{showDeleteConfirm.name}</strong>"?</>
+                )}
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end space-x-3 p-6 bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (showDeleteConfirm.isBulk) {
+                    confirmBulkDelete();
+                  } else {
+                    deleteFilePermanently(showDeleteConfirm.id);
+                    setShowDeleteConfirm(null);
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors flex items-center"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Permanently
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -418,7 +491,7 @@ const Bin = () => {
                           Restore
                         </button>
                         <button
-                          onClick={() => setShowDeleteConfirm(file.id)}
+                          onClick={() => setShowDeleteConfirm({ id: file.id, name: file.name, isBulk: false })}
                           className="flex-1 flex items-center justify-center px-3 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors"
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
@@ -426,43 +499,6 @@ const Bin = () => {
                         </button>
                       </div>
                     </div>
-
-                    {/* Delete Confirmation Modal */}
-                    {showDeleteConfirm === file.id && (
-                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg p-6 max-w-md mx-4">
-                          <div className="flex items-center space-x-3 mb-4">
-                            <div className="p-2 bg-red-100 rounded-full">
-                              <AlertCircle className="w-6 h-6 text-red-600" />
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-medium text-gray-900">Delete Permanently</h3>
-                              <p className="text-sm text-gray-500">This action cannot be undone</p>
-                            </div>
-                          </div>
-                          <p className="text-gray-700 mb-6">
-                            Are you sure you want to permanently delete "<strong>{file.name}</strong>"?
-                          </p>
-                          <div className="flex items-center justify-end space-x-3">
-                            <button
-                              onClick={() => setShowDeleteConfirm(null)}
-                              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => {
-                                deleteFilePermanently(file.id);
-                                setShowDeleteConfirm(null);
-                              }}
-                              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                            >
-                              Delete Permanently
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>

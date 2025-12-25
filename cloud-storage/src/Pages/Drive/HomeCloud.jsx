@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Search, Upload, Download, Link2, Edit3, Trash2, MoreVertical, 
   File, FileText, Image, Video, Music, Archive, Grid3x3, List,
@@ -15,6 +16,7 @@ const HomeCloud = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [showDropdown, setShowDropdown] = useState(null);
+  const [dropdownAnchor, setDropdownAnchor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
@@ -26,10 +28,10 @@ const HomeCloud = () => {
   });
   const [uploadingFile, setUploadingFile] = useState(false);
   const [notification, setNotification] = useState({ message: '', type: '', show: false });
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const API_BASE = `${BASE_URL}/cloud`;
 
-  // File type mapping for categories
   const typeMapping = {
     'Documents': ['pdf', 'doc', 'docx', 'txt', 'rtf'],
     'Images': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'],
@@ -47,7 +49,6 @@ const HomeCloud = () => {
     { name: 'Archives', icon: Archive, count: 0 }
   ];
 
-  // Show notification
   const showNotification = useCallback((message, type = 'success') => {
     setNotification({ message, type, show: true });
     setTimeout(() => {
@@ -55,69 +56,63 @@ const HomeCloud = () => {
     }, 3000);
   }, []);
 
-  // Fetch all files
   const fetchFiles = useCallback(async () => {
-  try {
-    setLoading(true);
-    const response = await fetch(`${API_BASE}/files`);
-    if (!response.ok) throw new Error('Failed to fetch files');
-    const data = await response.json();
-    
-    // Add local state properties and better data mapping
-    const filesWithState = data.map(file => ({
-      ...file,
-      id: file.id,
-      name: file.name,
-      mimeType: file.mimeType,
-      size: file.size || 0,
-      isStarred: false,
-      isPublic: false,
-      // Fix date mapping - use proper fallback chain
-      modifiedTime: file.modifiedTime || file.uploadedAt || file.createdTime || new Date().toISOString(),
-      createdTime: file.createdTime || file.uploadedAt || new Date().toISOString()
-    }));
-    
-    setFiles(filesWithState);
-    setRecentFiles(filesWithState.slice(0, 6));
-  } catch (error) {
-    console.error('Error fetching files:', error);
-    showNotification('Failed to load files', 'error');
-  } finally {
-    setLoading(false);
-  }
-}, [API_BASE, showNotification]);
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/files`);
+      if (!response.ok) throw new Error('Failed to fetch files');
+      const data = await response.json();
+      
+      const filesWithState = data.map(file => ({
+        ...file,
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+        size: file.size || 0,
+        isStarred: false,
+        isPublic: false,
+        modifiedTime: file.modifiedTime || file.uploadedAt || file.createdTime || new Date().toISOString(),
+        createdTime: file.createdTime || file.uploadedAt || new Date().toISOString()
+      }));
+      
+      setFiles(filesWithState);
+      setRecentFiles(filesWithState.slice(0, 6));
+    } catch (error) {
+      console.error('Error fetching files:', error);
+      showNotification('Failed to load files', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE, showNotification]);
 
-// 3. Fix other fetch functions similarly
-const fetchFilesByType = useCallback(async (type) => {
-  try {
-    setLoading(true);
-    const response = await fetch(`${API_BASE}/files/type?type=${type}`);
-    if (!response.ok) throw new Error('Failed to fetch files by type');
-    const data = await response.json();
-    
-    const filesWithState = data.map(file => ({
-      ...file,
-      id: file.id,
-      name: file.name,
-      mimeType: file.mimeType,
-      size: file.size || 0,
-      isStarred: false,
-      isPublic: false,
-      // Fix date mapping
-      modifiedTime: file.modifiedTime || file.uploadedAt || file.createdTime || new Date().toISOString(),
-      createdTime: file.createdTime || file.uploadedAt || new Date().toISOString()
-    }));
-    
-    setFiles(filesWithState);
-  } catch (error) {
-    console.error('Error fetching files by type:', error);
-    showNotification('Failed to load files by type', 'error');
-  } finally {
-    setLoading(false);
-  }
-}, [API_BASE, showNotification]);
+  const fetchFilesByType = useCallback(async (type) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/files/type?type=${type}`);
+      if (!response.ok) throw new Error('Failed to fetch files by type');
+      const data = await response.json();
+      
+      const filesWithState = data.map(file => ({
+        ...file,
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+        size: file.size || 0,
+        isStarred: false,
+        isPublic: false,
+        modifiedTime: file.modifiedTime || file.uploadedAt || file.createdTime || new Date().toISOString(),
+        createdTime: file.createdTime || file.uploadedAt || new Date().toISOString()
+      }));
+      
+      setFiles(filesWithState);
+    } catch (error) {
+      console.error('Error fetching files by type:', error);
+      showNotification('Failed to load files by type', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE, showNotification]);
 
-  // Fetch statistics
   const fetchStats = useCallback(async () => {
     try {
       const [filesCountRes, storageRes] = await Promise.all([
@@ -145,43 +140,39 @@ const fetchFilesByType = useCallback(async (type) => {
     }
   }, [API_BASE]);
 
-  // Search files
   const handleSearch = useCallback(async () => {
-  if (!searchTerm.trim()) {
-    fetchFiles();
-    return;
-  }
-  
-  try {
-    setLoading(true);
-    const response = await fetch(`${API_BASE}/search?name=${encodeURIComponent(searchTerm)}`);
-    if (!response.ok) throw new Error('Search failed');
-    const data = await response.json();
+    if (!searchTerm.trim()) {
+      fetchFiles();
+      return;
+    }
     
-    const filesWithState = data.map(file => ({
-      ...file,
-      id: file.id,
-      name: file.name,
-      mimeType: file.mimeType,
-      size: file.size || 0,
-      isStarred: false,
-      isPublic: false,
-      // Fix date mapping
-      modifiedTime: file.modifiedTime || file.uploadedAt || file.createdTime || new Date().toISOString(),
-      createdTime: file.createdTime || file.uploadedAt || new Date().toISOString()
-    }));
-    
-    setFiles(filesWithState);
-  } catch (error) {
-    console.error('Error searching files:', error);
-    showNotification('Search failed', 'error');
-  } finally {
-    setLoading(false);
-  }
-}, [searchTerm, fetchFiles, API_BASE, showNotification]);
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/search?name=${encodeURIComponent(searchTerm)}`);
+      if (!response.ok) throw new Error('Search failed');
+      const data = await response.json();
+      
+      const filesWithState = data.map(file => ({
+        ...file,
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+        size: file.size || 0,
+        isStarred: false,
+        isPublic: false,
+        modifiedTime: file.modifiedTime || file.uploadedAt || file.createdTime || new Date().toISOString(),
+        createdTime: file.createdTime || file.uploadedAt || new Date().toISOString()
+      }));
+      
+      setFiles(filesWithState);
+    } catch (error) {
+      console.error('Error searching files:', error);
+      showNotification('Search failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, fetchFiles, API_BASE, showNotification]);
 
-
-  // Upload file
   const handleFileUpload = useCallback(async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -206,14 +197,11 @@ const fetchFilesByType = useCallback(async (type) => {
       showNotification('Failed to upload file', 'error');
     } finally {
       setUploadingFile(false);
-      event.target.value = ''; // Reset file input
+      event.target.value = '';
     }
   }, [API_BASE, fetchFiles, fetchStats, showNotification]);
 
-  // Move file to trash (instead of permanent delete)
   const handleMoveToTrash = useCallback(async (fileId) => {
-    if (!window.confirm('Are you sure you want to move this file to trash?')) return;
-
     try {
       const response = await fetch(`${API_BASE}/trash/${fileId}`, {
         method: 'PUT',
@@ -228,16 +216,17 @@ const fetchFilesByType = useCallback(async (type) => {
         newSet.delete(fileId);
         return newSet;
       });
+      setDeleteConfirm(null);
       
       showNotification('File moved to trash successfully!');
       fetchStats();
     } catch (error) {
       console.error('Error moving file to trash:', error);
       showNotification('Failed to move file to trash', 'error');
+      setDeleteConfirm(null);
     }
   }, [API_BASE, showNotification, fetchStats]);
 
-  // Download file
   const handleDownloadFile = useCallback(async (fileId, fileName) => {
     try {
       const response = await fetch(`${API_BASE}/download/${fileId}`);
@@ -260,7 +249,6 @@ const fetchFilesByType = useCallback(async (type) => {
     }
   }, [API_BASE, showNotification]);
 
-  // Generate shareable link
   const handleGenerateLink = useCallback(async (fileId) => {
     try {
       const response = await fetch(`${API_BASE}/generate-link/${fileId}`);
@@ -276,7 +264,6 @@ const fetchFilesByType = useCallback(async (type) => {
     }
   }, [API_BASE, showNotification]);
 
-  // Make file public
   const handleMakePublic = useCallback(async (fileId) => {
     try {
       const response = await fetch(`${API_BASE}/public/${fileId}`, {
@@ -285,7 +272,6 @@ const fetchFilesByType = useCallback(async (type) => {
 
       if (!response.ok) throw new Error('Failed to make file public');
       
-      // Update local state
       setFiles(prev => prev.map(file => 
         file.id === fileId ? { ...file, isPublic: true } : file
       ));
@@ -297,7 +283,6 @@ const fetchFilesByType = useCallback(async (type) => {
     }
   }, [API_BASE, showNotification]);
 
-  // Update file name
   const handleRenameFile = useCallback(async (fileId, newName) => {
     try {
       const response = await fetch(`${API_BASE}/updateFileName/${fileId}`, {
@@ -321,13 +306,11 @@ const fetchFilesByType = useCallback(async (type) => {
     }
   }, [API_BASE, showNotification]);
 
-  // Initialize data on mount
   useEffect(() => {
     fetchFiles();
     fetchStats();
   }, [fetchFiles, fetchStats]);
 
-  // Handle category changes
   useEffect(() => {
     if (activeCategory === 'All') {
       fetchFiles();
@@ -336,7 +319,6 @@ const fetchFilesByType = useCallback(async (type) => {
     }
   }, [activeCategory, fetchFiles]);
 
-  // Get file type from name
   const getFileTypeFromName = useCallback((fileName) => {
     const extension = fileName?.split('.').pop()?.toLowerCase();
     for (const [category, extensions] of Object.entries(typeMapping)) {
@@ -347,11 +329,9 @@ const fetchFilesByType = useCallback(async (type) => {
     return 'other';
   }, []);
 
-  // Filter files based on category and search
   const filteredFiles = useMemo(() => {
     let filtered = files;
 
-    // Filter by category
     if (activeCategory !== 'All') {
       filtered = filtered.filter(file => {
         const fileType = getFileTypeFromName(file.name);
@@ -359,14 +339,12 @@ const fetchFilesByType = useCallback(async (type) => {
       });
     }
 
-    // Filter by search term
     if (searchTerm && searchTerm.trim()) {
       filtered = filtered.filter(file => 
         file.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Sort files
     filtered.sort((a, b) => {
       let aValue = a[sortBy] || '';
       let bValue = b[sortBy] || '';
@@ -439,11 +417,8 @@ const fetchFilesByType = useCallback(async (type) => {
 
   const formatFileSize = useCallback((size) => {
     if (!size || size === 0 || size === '0') return '0 B';
-    
-    // If size is already formatted as string (from API), return as is
     if (typeof size === 'string' && size.includes(' ')) return size;
     
-    // Convert bytes to human readable
     const bytes = parseInt(size);
     if (!bytes || bytes === 0) return '0 B';
     
@@ -453,48 +428,123 @@ const fetchFilesByType = useCallback(async (type) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }, []);
 
-const formatDate = useCallback((dateString) => {
-  if (!dateString) return 'Unknown';
-  
-  const date = new Date(dateString);
-  
-  // Check if date is valid
-  if (isNaN(date.getTime())) {
-    console.warn('Invalid date string:', dateString);
-    return 'Unknown';
-  }
-  
-  const now = new Date();
-  const diffTime = Math.abs(now - date);
-  const diffMinutes = Math.floor(diffTime / (1000 * 60));
-  const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); // Changed to Math.floor
-  
-  // More granular time formatting
-  if (diffMinutes < 1) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric' 
-  });
-}, []);
+  const formatDate = useCallback((dateString) => {
+    if (!dateString) return 'Unknown';
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return 'Unknown';
+    }
+    
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffMinutes = Math.floor(diffTime / (1000 * 60));
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  }, []);
 
-  // Enhanced dropdown positioning
-  const getDropdownPosition = (index, totalFiles) => {
-    const isNearBottom = index >= totalFiles - 2;
-    return isNearBottom ? 'bottom-12 right-4' : 'top-12 right-4';
+  const handleOpenDropdown = useCallback((e, id) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (showDropdown === id) {
+      setShowDropdown(null);
+      setDropdownAnchor(null);
+    } else {
+      setShowDropdown(id);
+      setDropdownAnchor(rect);
+    }
+    try { e.currentTarget.blur(); } catch (err) { }
+  }, [showDropdown]);
+
+  const DropdownPortal = ({ anchor, children }) => {
+    if (!anchor) return null;
+
+    const DROPDOWN_WIDTH = 192;
+    const DROPDOWN_HEIGHT = 220;
+
+    const spaceBelow = window.innerHeight - anchor.bottom;
+    const placeAbove = spaceBelow < DROPDOWN_HEIGHT;
+
+    let top;
+    if (placeAbove) {
+      top = anchor.top - DROPDOWN_HEIGHT - 8;
+      if (top < 8) top = 8;
+    } else {
+      top = anchor.bottom + 8;
+    }
+
+    let left = anchor.right - DROPDOWN_WIDTH;
+    if (left < 8) left = anchor.left;
+    if (left + DROPDOWN_WIDTH > window.innerWidth - 8) left = window.innerWidth - DROPDOWN_WIDTH - 8;
+
+    const docTop = top + window.scrollY;
+    const docLeft = left + window.scrollX;
+    const style = {
+      position: 'absolute',
+      top: `${docTop}px`,
+      left: `${docLeft}px`,
+      width: `${DROPDOWN_WIDTH}px`,
+      zIndex: 9999
+    };
+
+    return createPortal(
+      <div style={style} className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden" onClick={(ev) => ev.stopPropagation()}>
+        {children}
+      </div>,
+      document.body
+    );
+  };
+
+  const DeleteConfirmModal = ({ fileId }) => {
+    if (!fileId) return null;
+
+    return createPortal(
+      <div className="fixed inset-0 bg-black bg-opacity-50 bg-opacity-50 z-10 flex items-center justify-center p-4" onClick={() => setDeleteConfirm(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mb-4 mx-auto">
+            <Trash2 className="w-6 h-6 text-red-600" />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2 text-center">Move to Trash</h3>
+          <p className="text-sm text-gray-500 mb-6 text-center">
+            Are you sure you want to move this file to trash? This action can be undone from the trash folder.
+          </p>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => handleMoveToTrash(fileId)}
+              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+            >
+              Yes, Delete
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(null)}
+              className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
   };
 
   const FileCard = ({ file, index }) => (
     <div className={`group relative bg-white rounded-xl border-2 transition-all duration-200 hover:shadow-lg hover:scale-[1.02] ${
       selectedFiles.has(file.id) ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'
     }`}>
-      <div className="absolute inset-0 bg-blue-600 opacity-0 group-hover:opacity-5 rounded-xl transition-opacity duration-200" />
+      <div className="absolute inset-0 bg-blue-600 opacity-0 group-hover:opacity-5 rounded-xl transition-opacity duration-200 pointer-events-none" />
       
       <div className="p-4">
         <div className="flex items-start justify-between mb-3">
@@ -515,7 +565,8 @@ const formatDate = useCallback((dateString) => {
               <Star className={`w-4 h-4 ${file.isStarred ? 'text-yellow-500 fill-current' : 'text-gray-400'}`} />
             </button>
             <button
-              onClick={() => setShowDropdown(showDropdown === file.id ? null : file.id)}
+              type="button"
+              onClick={(e) => handleOpenDropdown(e, file.id)}
               className="p-1 rounded-full hover:bg-gray-100"
             >
               <MoreVertical className="w-4 h-4 text-gray-500" />
@@ -552,71 +603,23 @@ const formatDate = useCallback((dateString) => {
 
       {showDropdown === file.id && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(null)} />
-          <div className={`absolute ${getDropdownPosition(index, recentFiles.length)} w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden`}>
-          <button 
-            onClick={() => {
-              setShowDropdown(null);
-              handleDownloadFile(file.id, file.name);
-            }}
-            className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-          >
-            <Download className="w-4 h-4 mr-3" />
-            Download
-          </button>
-          <button 
-            onClick={() => {
-              setShowDropdown(null);
-              handleGenerateLink(file.id);
-            }}
-            className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-          >
-            <Link2 className="w-4 h-4 mr-3" />
-            Get Link
-          </button>
-          <button 
-            onClick={() => {
-              setShowDropdown(null);
-              const newName = prompt('Enter new name:', file.name);
-              if (newName && newName.trim() && newName !== file.name) {
-                handleRenameFile(file.id, newName.trim());
-              }
-            }}
-            className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-          >
-            <Edit3 className="w-4 h-4 mr-3" />
-            Rename
-          </button>
-          <button 
-            onClick={() => {
-              setShowDropdown(null);
-              handleMakePublic(file.id);
-            }}
-            className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-          >
-            <Share2 className="w-4 h-4 mr-3" />
-            Make Public
-          </button>
-          <div className="border-t border-gray-100">
-            <button 
-              onClick={() => {
-                setShowDropdown(null);
-                handleMoveToTrash(file.id);
-              }}
-              className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"
-            >
-              <Trash2 className="w-4 h-4 mr-3" />
-              Move to Trash
-            </button>
-          </div>
-        </div>
+          <div className="fixed inset-0 z-40" onClick={() => { setShowDropdown(null); setDropdownAnchor(null); }} />
+          <DropdownPortal anchor={dropdownAnchor}>
+            <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleDownloadFile(file.id, file.name); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Download className="w-4 h-4 mr-3" />Download</button>
+            <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleGenerateLink(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Link2 className="w-4 h-4 mr-3" />Get Link</button>
+            <button onClick={() => { setShowDropdown(null); setDropdownAnchor(null); const newName = prompt('Enter new name:', file.name); if (newName && newName.trim() && newName !== file.name) { handleRenameFile(file.id, newName.trim()); } }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Edit3 className="w-4 h-4 mr-3" />Rename</button>
+            <button onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleMakePublic(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Share2 className="w-4 h-4 mr-3" />Make Public</button>
+            <div className="border-t border-gray-100">
+              <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); setDeleteConfirm(file.id); }} className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"><Trash2 className="w-4 h-4 mr-3" />Move to Trash</button>
+            </div>
+          </DropdownPortal>
         </>
       )}
     </div>
   );
 
   const FileListItem = ({ file, index }) => (
-    <div className={`flex items-center py-3 px-4 hover:bg-gray-50 transition-colors group ${
+    <div className={`flex items-center py-3 px-4 hover:bg-gray-50 transition-colors group relative ${
       selectedFiles.has(file.id) ? 'bg-blue-50' : ''
     }`}>
       <button
@@ -651,70 +654,23 @@ const formatDate = useCallback((dateString) => {
         
         <div className="relative">
           <button
-            onClick={() => setShowDropdown(showDropdown === file.id ? null : file.id)}
+            type="button"
+            onClick={(e) => handleOpenDropdown(e, file.id)}
             className="p-1 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <MoreVertical className="w-4 h-4 text-gray-500" />
           </button>
-          
           {showDropdown === file.id && (
-            <div className={`absolute ${getDropdownPosition(index, filteredFiles.length)} w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-30 overflow-hidden`}>
-              <button 
-                onClick={() => {
-                  setShowDropdown(null);
-                  handleDownloadFile(file.id, file.name);
-                }}
-                className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-              >
-                <Download className="w-4 h-4 mr-3" />
-                Download
-              </button>
-              <button 
-                onClick={() => {
-                  setShowDropdown(null);
-                  handleGenerateLink(file.id);
-                }}
-                className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-              >
-                <Link2 className="w-4 h-4 mr-3" />
-                Get Link
-              </button>
-              <button 
-                onClick={() => {
-                  setShowDropdown(null);
-                  const newName = prompt('Enter new name:', file.name);
-                  if (newName && newName.trim() && newName !== file.name) {
-                    handleRenameFile(file.id, newName.trim());
-                  }
-                }}
-                className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-              >
-                <Edit3 className="w-4 h-4 mr-3" />
-                Rename
-              </button>
-              <button 
-                onClick={() => {
-                  setShowDropdown(null);
-                  handleMakePublic(file.id);
-                }}
-                className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-              >
-                <Share2 className="w-4 h-4 mr-3" />
-                Make Public
-              </button>
-              <div className="border-t border-gray-100">
-                <button 
-                  onClick={() => {
-                    setShowDropdown(null);
-                    handleMoveToTrash(file.id);
-                  }}
-                  className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"
-                >
-                  <Trash2 className="w-4 h-4 mr-3" />
-                  Move to Trash
-                </button>
-              </div>
-            </div>
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => { setShowDropdown(null); setDropdownAnchor(null); }} />
+              <DropdownPortal anchor={dropdownAnchor}>
+                <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleDownloadFile(file.id, file.name); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Download className="w-4 h-4 mr-3" />Download</button>
+                <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleGenerateLink(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Link2 className="w-4 h-4 mr-3" />Get Link</button>
+                <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); const newName = prompt('Enter new name:', file.name); if (newName && newName.trim() && newName !== file.name) { handleRenameFile(file.id, newName.trim()); } }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Edit3 className="w-4 h-4 mr-3" />Rename</button>
+                <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleMakePublic(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Share2 className="w-4 h-4 mr-3" />Make Public</button>
+                <div className="border-t border-gray-100"><button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); setDeleteConfirm(file.id); }} className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"><Trash2 className="w-4 h-4 mr-3" />Move to Trash</button></div>
+              </DropdownPortal>
+            </>
           )}
         </div>
       </div>
@@ -723,7 +679,8 @@ const formatDate = useCallback((dateString) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Notification */}
+      <DeleteConfirmModal fileId={deleteConfirm} />
+      
       {notification.show && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border flex items-center space-x-2 transition-all duration-300 ${
           notification.type === 'success' 
@@ -738,50 +695,6 @@ const formatDate = useCallback((dateString) => {
         </div>
       )}
 
-      {/* Header
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                My Drive
-              </h1>
-              {selectedFiles.size > 0 && (
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                  {selectedFiles.size} selected
-                </span>
-              )}
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <input
-                  type="file"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="file-upload"
-                  disabled={uploadingFile}
-                />
-                <label
-                  htmlFor="file-upload"
-                  className={`flex items-center p-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg cursor-pointer ${
-                    uploadingFile ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  {uploadingFile ? (
-                    <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <Upload className="w-5 h-5 mr-2" />
-                  )}
-                  {uploadingFile ? 'Uploading...' : 'Upload'}
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header> */}
-
-      {/* Search Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center justify-center mb-8">
           <div className="flex items-center space-x-4 w-full max-w-2xl">
@@ -809,7 +722,6 @@ const formatDate = useCallback((dateString) => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Recently Uploaded Files */}
         {recentFiles.length > 0 && (
           <div className="mb-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -835,48 +747,22 @@ const formatDate = useCallback((dateString) => {
                       </div>
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => setShowDropdown(showDropdown === file.id ? null : file.id)}
+                          type="button"
+                          onClick={(e) => handleOpenDropdown(e, file.id)}
                           className="p-1 rounded-full hover:bg-white shadow-sm"
                         >
                           <MoreVertical className="w-4 h-4 text-gray-500" />
                         </button>
                       </div>
-                      
                       {showDropdown === file.id && (
-                        <div className={`absolute ${getDropdownPosition(index, recentFiles.length)} w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-30 overflow-hidden`}>
-                          <button 
-                            onClick={() => {
-                              setShowDropdown(null);
-                              handleDownloadFile(file.id, file.name);
-                            }}
-                            className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-                          >
-                            <Download className="w-4 h-4 mr-3" />
-                            Download
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setShowDropdown(null);
-                              handleGenerateLink(file.id);
-                            }}
-                            className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"
-                          >
-                            <Link2 className="w-4 h-4 mr-3" />
-                            Get Link
-                          </button>
-                          <div className="border-t border-gray-100">
-                            <button 
-                              onClick={() => {
-                                setShowDropdown(null);
-                                handleMoveToTrash(file.id);
-                              }}
-                              className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4 mr-3" />
-                              Move to Trash
-                            </button>
-                          </div>
-                        </div>
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => { setShowDropdown(null); setDropdownAnchor(null); }} />
+                          <DropdownPortal anchor={dropdownAnchor}>
+                            <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleDownloadFile(file.id, file.name); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Download className="w-4 h-4 mr-3" />Download</button>
+                            <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleGenerateLink(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Link2 className="w-4 h-4 mr-3" />Get Link</button>
+                            <div className="border-t border-gray-100"><button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); setDeleteConfirm(file.id); }} className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"><Trash2 className="w-4 h-4 mr-3" />Move to Trash</button></div>
+                          </DropdownPortal>
+                        </>
                       )}
                     </div>
                   ))}
@@ -886,14 +772,13 @@ const formatDate = useCallback((dateString) => {
           </div>
         )}
 
-        {/* Categories */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">Categories</h3>
+            <div className="p-4 md:p-6 border-b border-gray-100">
+              <h3 className="text-base md:text-lg font-semibold text-gray-900">Categories</h3>
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="p-4 md:p-6 overflow-x-auto">
+              <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 pb-2 md:pb-0" style={{minWidth: 'max-content'}}>
                 {categories.map((category) => {
                   const Icon = category.icon;
                   const isActive = activeCategory === category.name;
@@ -905,20 +790,21 @@ const formatDate = useCallback((dateString) => {
                     <button
                       key={category.name}
                       onClick={() => setActiveCategory(category.name)}
-                      className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
+                      className={`flex flex-col items-center p-3 md:p-4 rounded-lg md:rounded-xl border-2 transition-all whitespace-nowrap ${
                         isActive
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
                           : 'border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-50'
                       }`}
+                      style={{minWidth: '90px'}}
                     >
-                      <Icon className={`w-8 h-8 mb-2 ${
+                      <Icon className={`w-6 h-6 md:w-8 md:h-8 mb-1 md:mb-2 ${
                         isActive ? 'text-blue-600' : 'text-gray-500'
                       }`} />
-                      <span className="text-sm font-medium">{category.name}</span>
-                      <span className={`text-xs mt-1 px-2 py-1 rounded-full ${
+                      <span className="text-xs md:text-sm font-medium">{category.name}</span>
+                      <span className={`text-xs mt-1 px-1.5 md:px-2 py-0.5 md:py-1 rounded-full ${
                         isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
                       }`}>
-                        {categoryCount} files
+                        {categoryCount}
                       </span>
                     </button>
                   );
@@ -929,38 +815,66 @@ const formatDate = useCallback((dateString) => {
         </div>
 
         <div className="flex gap-6">
-          {/* Main Content */}
           <div className="flex-1 min-w-0">
-            {/* Controls Bar */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-              <div className="flex items-center justify-between">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 md:p-4 mb-4 md:mb-6">
+              <div className="flex flex-col sm:hidden space-y-3">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={handleSelectAll}
+                    className={`flex items-center px-3 py-2 text-xs rounded-lg transition-colors ${
+                      selectedFiles.size > 0 ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {selectedFiles.size === filteredFiles.length && filteredFiles.length > 0 ? 
+                      <CheckCircle2 className="w-4 h-4 mr-1.5" /> : 
+                      <Circle className="w-4 h-4 mr-1.5" />
+                    }
+                    Select
+                  </button>
+
+                  <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                    <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
+                      <Grid3x3 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>
+                      <List className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="flex-1 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="name">Name</option>
+                    <option value="size">Size</option>
+                    <option value="modifiedTime">Date</option>
+                  </select>
+                  
+                  <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className="p-1.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
+                    <ArrowUpDown className={`w-4 h-4 ${sortOrder === 'desc' ? 'rotate-180' : ''} transition-transform`} />
+                  </button>
+
+                  {selectedFiles.size > 0 && (
+                    <button onClick={() => { selectedFiles.forEach(fileId => { handleMoveToTrash(fileId); }); }} className="p-1.5 bg-red-50 border border-red-200 rounded-lg transition-colors">
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-xs text-gray-500 text-center">
+                  {filteredFiles.length} of {stats.totalFiles} files • {stats.storageUsed}
+                </div>
+              </div>
+
+              <div className="hidden sm:flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">
-                    <button
-                      onClick={handleSelectAll}
-                      className={`flex items-center px-3 py-2 text-sm rounded-lg transition-colors ${
-                        selectedFiles.size > 0
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      {selectedFiles.size === filteredFiles.length && filteredFiles.length > 0 ? (
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                      ) : (
-                        <Circle className="w-4 h-4 mr-2" />
-                      )}
+                    <button onClick={handleSelectAll} className={`flex items-center px-3 py-2 text-sm rounded-lg transition-colors ${selectedFiles.size > 0 ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                      {selectedFiles.size === filteredFiles.length && filteredFiles.length > 0 ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Circle className="w-4 h-4 mr-2" />}
                       Select All
                     </button>
                     
                     {selectedFiles.size > 0 && (
-                      <button
-                        onClick={() => {
-                          selectedFiles.forEach(fileId => {
-                            handleMoveToTrash(fileId);
-                          });
-                        }}
-                        className="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
+                      <button onClick={() => { selectedFiles.forEach(fileId => { handleMoveToTrash(fileId); }); }} className="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4 mr-2" />
                         Move to Trash
                       </button>
@@ -968,21 +882,13 @@ const formatDate = useCallback((dateString) => {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
+                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                       <option value="name">Sort by Name</option>
                       <option value="size">Sort by Size</option>
                       <option value="modifiedTime">Sort by Date</option>
                     </select>
                     
-                    <button
-                      onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                      className="p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-                      title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
-                    >
+                    <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} className="p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors" title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}>
                       <ArrowUpDown className={`w-4 h-4 ${sortOrder === 'desc' ? 'rotate-180' : ''} transition-transform`} />
                     </button>
                   </div>
@@ -994,24 +900,10 @@ const formatDate = useCallback((dateString) => {
                   </span>
                   
                   <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`p-2 rounded-md transition-colors ${
-                        viewMode === 'grid'
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
+                    <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                       <Grid3x3 className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`p-2 rounded-md transition-colors ${
-                        viewMode === 'list'
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
+                    <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                       <List className="w-4 h-4" />
                     </button>
                   </div>
@@ -1019,7 +911,6 @@ const formatDate = useCallback((dateString) => {
               </div>
             </div>
 
-            {/* Files Display */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
                 <div className="flex items-center justify-center py-16">
@@ -1073,7 +964,6 @@ const formatDate = useCallback((dateString) => {
         </div>
       </div>
 
-      {/* Click outside to close dropdown */}
       {showDropdown && (
         <div 
           className="fixed inset-0 z-20" 
