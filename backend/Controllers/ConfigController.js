@@ -1,4 +1,5 @@
 const Configuration = require('../Models/ConfigModel');
+const redisClient = require("../Config/redis");
 
 exports.saveConfig = async (req, res) => {
   try {
@@ -52,6 +53,8 @@ exports.saveConfig = async (req, res) => {
     }
 
     await config.save();
+    await redisClient.del(`config:${userId}`);
+
     console.log('Config saved successfully:', config);
     console.log('=== End Save Config Backend ===');
     
@@ -70,28 +73,69 @@ exports.saveConfig = async (req, res) => {
 };
 
 // Get Configuration by User
+// exports.getConfig = async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+//     console.log('Fetching config for user:', userId);
+    
+//     const config = await Configuration.findOne({ userId });
+
+//     if (!config) {
+//       console.log('No configuration found for user:', userId);
+//       return res.status(404).json({ message: 'No configuration found' });
+//     }
+
+//     console.log('Config found:', config);
+//     res.status(200).json(config);
+//   } catch (error) {
+//     console.error('Error fetching configuration:', error);
+//     res.status(500).json({ 
+//       message: 'Error fetching configuration', 
+//       error: error.message 
+//     });
+//   }
+// };
 exports.getConfig = async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log('Fetching config for user:', userId);
-    
+    const cacheKey = `config:${userId}`;
+
+    // 1️⃣ Check Redis
+    let cachedConfig;
+    try {
+      cachedConfig = await redisClient.get(cacheKey);
+    } catch {
+      console.warn("Redis unavailable, skipping config cache");
+    }
+
+    if (cachedConfig) {
+      return res.status(200).json(JSON.parse(cachedConfig));
+    }
+
+    // 2️⃣ Fetch from MongoDB
     const config = await Configuration.findOne({ userId });
 
     if (!config) {
-      console.log('No configuration found for user:', userId);
       return res.status(404).json({ message: 'No configuration found' });
     }
 
-    console.log('Config found:', config);
+    // 3️⃣ Cache for 10 minutes
+    await redisClient.setEx(
+      cacheKey,
+      600,
+      JSON.stringify(config)
+    );
+
     res.status(200).json(config);
   } catch (error) {
     console.error('Error fetching configuration:', error);
-    res.status(500).json({ 
-      message: 'Error fetching configuration', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error fetching configuration',
+      error: error.message
     });
   }
 };
+
 
 // Delete Configuration (optional - you mentioned deleteConfig in routes)
 exports.deleteConfig = async (req, res) => {
@@ -102,6 +146,9 @@ exports.deleteConfig = async (req, res) => {
     if (!config) {
       return res.status(404).json({ message: 'No configuration found to delete' });
     }
+
+    await redisClient.del(`config:${userId}`);
+
 
     res.status(200).json({ 
       message: 'Configuration deleted successfully',

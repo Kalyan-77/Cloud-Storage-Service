@@ -26,4 +26,10 @@ router.delete(
 
 router.delete("/chat/me/:roomId", chat.deleteChatForMe);
 
+// 🔴 Get unread count for a specific room
+router.get(
+  "/unread/:roomId",
+  chat.getUnreadCountByRoom
+);
+
 module.exports = router;
