@@ -1,6 +1,7 @@
 const ChatRoom = require("../Models/ChatRoom");
 const Message = require("../Models/Message");
 const Users = require("../Models/Users");
+const redisClient = require("../Config/redis");
 
 // Get all users except self
 exports.getUsers = async (req, res) => {
@@ -30,13 +31,32 @@ exports.getOrCreateRoom = async (req, res) => {
 };
 
 // Get messages - 🔥 FIX: Populate sender info
+// exports.getMessages = async (req, res) => {
+//   const messages = await Message.find({ roomId: req.params.roomId })
+//     .populate("sender", "name email avatar")
+//     .sort({ createdAt: 1 }); // Sort by oldest first
+
+//   res.json(messages);
+// };
+
 exports.getMessages = async (req, res) => {
-  const messages = await Message.find({ roomId: req.params.roomId })
+  const userId = req.session.user._id;
+  const roomId = req.params.roomId;
+
+  try {
+    await redisClient.del(`chat:unread:${userId}:${roomId}`);
+  } catch {
+    console.warn("Redis unavailable, unread reset skipped");
+  }
+
+
+  const messages = await Message.find({ roomId })
     .populate("sender", "name email avatar")
-    .sort({ createdAt: 1 }); // Sort by oldest first
+    .sort({ createdAt: 1 });
 
   res.json(messages);
 };
+
 
 // ✅ FIX 3: Send file message - backend emits receive-message
 exports.sendFileMessage = async (req, res) => {
@@ -136,4 +156,16 @@ exports.deleteChatForMe = async (req, res) => {
   );
 
   res.json({ success: true });
+};
+
+exports.getUnreadCountByRoom = async (req, res) => {
+  const userId = req.session.user._id;
+  const { roomId } = req.params;
+
+  try {
+    const count = await redisClient.get(`chat:unread:${userId}:${roomId}`);
+    res.json({ unread: Number(count) || 0 });
+  } catch {
+    res.json({ unread: 0 });
+  }
 };

@@ -2,8 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, User, Menu, X, ChevronDown, LogOut, UserCircle } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+
+// These imports should come from your actual files
 import { useAuth } from '../../Context/AuthContext';
 import { BASE_URL } from '../../../config';
+
 
 export default function CloudStorageNavbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -11,10 +14,38 @@ export default function CloudStorageNavbar() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoadingMacEnvironment, setIsLoadingMacEnvironment] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  
   const location = useLocation();
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
   const dropdownRef = useRef(null);
+  const searchRef = useRef(null);
+
+  // Search database with all features and pages
+  const searchDatabase = [
+    { name: 'Home', path: '/dashboard', description: 'Dashboard overview and quick access', keywords: ['dashboard', 'home', 'main', 'overview'] },
+    { name: 'Configuration', path: '/dashboard/configure', description: 'Configure cloud storage and sync settings', keywords: ['config', 'settings', 'configure', 'setup'] },
+    { name: 'Cloud Storage', path: '/dashboard/cloud', description: 'Access and manage your files', keywords: ['cloud', 'storage', 'files', 'drive'] },
+    { name: 'Desktop Apps', path: '/dashboard/configure/installesapps', description: 'View and manage installed applications', keywords: ['apps', 'applications', 'installed', 'programs'] },
+    { name: 'API & Integrations', path: '/dashboard/configure/api', description: 'API keys and webhook configurations', keywords: ['api', 'integration', 'webhook', 'keys'] },
+    { name: 'Profile', path: '/dashboard/profile', description: 'Manage your account and personal info', keywords: ['profile', 'account', 'user', 'personal'] },
+    { name: 'Settings', path: '/dashboard/settings', description: 'Customize your preferences', keywords: ['settings', 'preferences', 'options'] },
+    { name: 'Storage Tracking', path: '/dashboard/storagetracking', description: 'Visual display of storage usage', keywords: ['storage', 'tracking', 'usage', 'space'] },
+    { name: 'MacEnvironment', path: 'https://mac-os-woad.vercel.app/', description: 'Launch immersive MacOS experience', keywords: ['mac', 'macos', 'environment', 'kiosk'], isSpecial: true },
+    { name: 'My Files', path: '/dashboard/cloud', description: 'Browse all your uploaded files', keywords: ['files', 'my files', 'documents'] },
+    { name: 'Recent', path: '/dashboard/cloud', description: 'Recently uploaded files', keywords: ['recent', 'latest', 'new'] },
+    { name: 'Starred', path: '/dashboard/cloud/starred', description: 'Your favorite and important files', keywords: ['starred', 'favorites', 'important'] },
+    { name: 'Trash', path: '/dashboard/cloud/bin', description: 'Recover or permanently delete files', keywords: ['trash', 'bin', 'deleted', 'recycle'] },
+    { name: 'Database Config', path: '/dashboard/configure', description: 'Database configuration settings', keywords: ['database', 'db', 'data'] },
+    { name: 'Security', path: '/dashboard/configure', description: 'Authentication and permissions', keywords: ['security', 'auth', 'permissions'] },
+    { name: 'Notifications', path: '/dashboard/configure', description: 'Email and push alert settings', keywords: ['notifications', 'alerts', 'email'] },
+  ];
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -25,10 +56,96 @@ export default function CloudStorageNavbar() {
     setIsProfileDropdownOpen(!isProfileDropdownOpen);
   };
 
+  // Handle search input
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    setSelectedIndex(-1); // Reset selection when typing
+
+    if (query.trim().length > 0) {
+      const filtered = searchDatabase.filter(item => 
+        item.name.toLowerCase().includes(query.toLowerCase()) ||
+        item.keywords.some(keyword => keyword.toLowerCase().includes(query.toLowerCase()))
+      ).slice(0, 6); // Limit to 6 suggestions
+      
+      setFilteredSuggestions(filtered);
+      setShowSearchSuggestions(true);
+    } else {
+      setFilteredSuggestions([]);
+      setShowSearchSuggestions(false);
+    }
+  };
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e) => {
+    if (!showSearchSuggestions || filteredSuggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedIndex(prev => 
+          prev < filteredSuggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < filteredSuggestions.length) {
+          handleSuggestionClick(filteredSuggestions[selectedIndex]);
+        } else if (filteredSuggestions.length > 0) {
+          handleSuggestionClick(filteredSuggestions[0]);
+        }
+        break;
+      case 'Escape':
+        setShowSearchSuggestions(false);
+        setSelectedIndex(-1);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Handle search suggestion click
+  const handleSuggestionClick = (item) => {
+    setSearchQuery('');
+    setShowSearchSuggestions(false);
+    setSelectedIndex(-1);
+    
+    if (item.isSpecial) {
+      handleMacEnvironment({ preventDefault: () => {} });
+    } else {
+      navigate(item.path);
+    }
+  };
+
+  // Handle search submit
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (selectedIndex >= 0 && selectedIndex < filteredSuggestions.length) {
+      handleSuggestionClick(filteredSuggestions[selectedIndex]);
+    } else if (filteredSuggestions.length > 0) {
+      handleSuggestionClick(filteredSuggestions[0]);
+    }
+  };
+
+  // Close search suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSearchSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      // Check if click is outside dropdown AND not on a button inside dropdown
       if (dropdownRef.current && 
           !dropdownRef.current.contains(event.target) &&
           !event.target.closest('button[data-dropdown-action]')) {
@@ -49,7 +166,6 @@ export default function CloudStorageNavbar() {
     return location.pathname === path;
   };
 
-  // Handle logout
   const handleLogout = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -82,18 +198,12 @@ export default function CloudStorageNavbar() {
         setUser(null);
       }
       
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      localStorage.removeItem('authToken');
-      sessionStorage.clear();
-      
       setIsProfileDropdownOpen(false);
       navigate("/", { replace: true });
       setIsLoggingOut(false);
     }
   };
 
-  // Handle profile navigation
   const handleProfile = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -113,7 +223,6 @@ export default function CloudStorageNavbar() {
     }
   };
 
-  // Handle MacEnvironment navigation with loading
   const handleMacEnvironment = (e) => {
     e.preventDefault();
     
@@ -141,38 +250,10 @@ export default function CloudStorageNavbar() {
               'left=0',
               'top=0'
             ].join(',');
-            const newWindow = window.open('https://mac-os-woad.vercel.app/', '_blank', windowFeatures);  // http://localhost:5173/
+            const newWindow = window.open('https://mac-os-woad.vercel.app/', '_blank', windowFeatures);
             
             if (newWindow) {
               newWindow.focus();
-              
-              setTimeout(() => {
-                try {
-                  if (newWindow.document && newWindow.document.documentElement) {
-                    const docElement = newWindow.document.documentElement;
-                    
-                    const requestFullscreen = docElement.requestFullscreen || 
-                                            docElement.mozRequestFullScreen || 
-                                            docElement.webkitRequestFullscreen || 
-                                            docElement.msRequestFullscreen;
-                    
-                    if (requestFullscreen) {
-                      requestFullscreen.call(docElement).catch(() => {});
-                    }
-                  }
-                } catch (fullscreenError) {
-                  console.log('Fullscreen operations failed:', fullscreenError.message);
-                }
-              }, 3000);
-              
-            } else {
-              const link = document.createElement('a');
-              link.href = 'https://mac-os-woad.vercel.app/';
-              link.target = '_blank';
-              link.rel = 'noopener noreferrer';
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
             }
           } catch (error) {
             console.error('Navigation failed:', error);
@@ -212,9 +293,6 @@ export default function CloudStorageNavbar() {
             <p className="text-sm text-gray-500">
               {countdown > 1 ? `Opening in kiosk mode in ${countdown} seconds` : 'Entering fullscreen now...'}
             </p>
-            <p className="text-xs text-gray-400 mt-2">
-              Browser UI and taskbar will be hidden
-            </p>
           </div>
         </div>
       )}
@@ -228,9 +306,6 @@ export default function CloudStorageNavbar() {
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                   <a href='/'><img src='https://www.hkcert.org/f/guideline/218189/1200c630/hkcert-Cloud%20Storage%20Security%20banner-1860x1046.jpg' alt="Logo" className="w-full h-full object-cover rounded-lg" /></a>
                 </div>
-                <div className="absolute -top-1 -left-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-300 rounded-full opacity-60"></div>
-                <div className="absolute -top-2 left-2 w-1 h-1 sm:w-1.5 sm:h-1.5 bg-blue-400 rounded-full opacity-40"></div>
-                <div className="absolute top-1 -left-2 w-0.5 h-0.5 sm:w-1 sm:h-1 bg-blue-500 rounded-full opacity-50"></div>
               </div>
             </div>
             
@@ -244,16 +319,43 @@ export default function CloudStorageNavbar() {
             </h1>
           </div>
 
-          {/* Center - Search bar */}
-          <div className="hidden md:block flex-1 max-w-md mx-4 lg:mx-8">
+          {/* Center - Search bar with suggestions */}
+          <div className="hidden md:block flex-1 max-w-md mx-4 lg:mx-8 relative" ref={searchRef}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search Here....."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onKeyDown={handleKeyDown}
+                onFocus={() => searchQuery && setShowSearchSuggestions(true)}
+                placeholder="Search features, pages..."
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
             </div>
+
+            {/* Search Suggestions Dropdown */}
+            {showSearchSuggestions && filteredSuggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 max-h-80 overflow-y-auto z-50">
+                {filteredSuggestions.map((item, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(item)}
+                    className={`w-full px-4 py-3 text-left transition-colors border-b border-gray-100 last:border-b-0 flex items-center space-x-3 ${
+                      selectedIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <Search className={`w-4 h-4 ${selectedIndex === index ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <div className="flex-1">
+                      <div className={`text-sm font-medium ${selectedIndex === index ? 'text-blue-600' : 'text-gray-900'}`}>
+                        {item.name}
+                      </div>
+                      <div className="text-xs text-gray-500">{item.description}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Right side - Desktop Navigation and profile */}
@@ -309,11 +411,8 @@ export default function CloudStorageNavbar() {
                 <ChevronDown className="w-4 h-4 text-gray-500" />
               </button>
 
-              {/* Dropdown Menu */}
               {isProfileDropdownOpen && (
-                <div 
-                  className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
-                >
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-medium text-gray-900">
                       {user ? user.name : 'Username'}
@@ -351,7 +450,6 @@ export default function CloudStorageNavbar() {
 
           {/* Mobile menu button and profile */}
           <div className="flex lg:hidden items-center space-x-3">
-            {/* Mobile Profile Dropdown */}
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={toggleProfileDropdown}
@@ -361,11 +459,8 @@ export default function CloudStorageNavbar() {
                 <User className="w-4 h-4 text-white" />
               </button>
 
-              {/* Mobile Dropdown Menu */}
               {isProfileDropdownOpen && (
-                <div 
-                  className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
-                >
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-medium text-gray-900">
                       {user ? user.name : 'Username'}
@@ -419,15 +514,45 @@ export default function CloudStorageNavbar() {
         <div className="lg:hidden bg-white border-b border-gray-200 shadow-sm fixed top-16 left-0 right-0 z-40">
           <div className="px-4 py-3 space-y-3">
             {/* Mobile search bar */}
-            <div className="md:hidden">
+            <div className="md:hidden relative" ref={searchRef}>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder="Search Here....."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onKeyDown={handleKeyDown}
+                  onFocus={() => searchQuery && setShowSearchSuggestions(true)}
+                  placeholder="Search features, pages..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
+
+              {/* Mobile Search Suggestions */}
+              {showSearchSuggestions && filteredSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-y-auto z-50">
+                  {filteredSuggestions.map((item, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        handleSuggestionClick(item);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left transition-colors border-b border-gray-100 last:border-b-0 flex items-center space-x-3 ${
+                        selectedIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <Search className={`w-4 h-4 ${selectedIndex === index ? 'text-blue-600' : 'text-gray-400'}`} />
+                      <div className="flex-1">
+                        <div className={`text-sm font-medium ${selectedIndex === index ? 'text-blue-600' : 'text-gray-900'}`}>
+                          {item.name}
+                        </div>
+                        <div className="text-xs text-gray-500">{item.description}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             
             {/* Mobile navigation */}

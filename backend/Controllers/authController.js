@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const Users = require('../Models/Users');
+const redisClient = require('../Config/redis');
 
 const router = express.Router();
 
@@ -125,7 +126,9 @@ exports.UpdateUser = async(req, res) =>{
                 updatedAt: user.updatedAt
             };
         }
-        
+        // Clear Redis cache
+        await redisClient.del(`auth:session:${id}`);
+
         res.status(200).json({
             success: true,
             message: 'User Updated Successfully',
@@ -165,66 +168,140 @@ exports.Delete = async (req, res) => {
 }
 
 exports.Logout = async(req, res) =>{
-    req.session.destroy((err) =>{
-        if(err){
-            return res.status(500).json({message: 'Logout Failed'});
+    if (req.session?.user?._id) {
+        await redisClient.del(`auth:session:${req.session.user._id}`);
+    }
+
+    req.session.destroy((err) => {
+        if (err) {
+        return res.status(500).json({ message: 'Logout Failed' });
         }
 
         res.clearCookie("sessionID");
         res.json({
-            success: true,
-            message: "Logged out successfully"
+        success: true,
+        message: "Logged out successfully"
         });
     });
+    // req.session.destroy((err) =>{
+    //     if(err){
+    //         return res.status(500).json({message: 'Logout Failed'});
+    //     }
+
+    //     res.clearCookie("sessionID");
+    //     res.json({
+    //         success: true,
+    //         message: "Logged out successfully"
+    //     });
+    // });
 };
 
 exports.checkSession = async(req, res) =>{
     console.log("Session ID:", req.sessionID);
     console.log("Session Data:", req.session);
-    
-    if(req.session && req.session.user){
-        console.log("✅ User logged in:", req.session.user);
-        
-        // Fetch fresh user data from database to get latest timestamps
-        try {
-            const user = await Users.findById(req.session.user._id).select('-password');
-            if(user) {
-                // Update session with fresh data
-                req.session.user = {
-                    _id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    avatar: user.avatar,
-                    createdAt: user.createdAt,
-                    updatedAt: user.updatedAt
-                };
-                
-                res.json({
-                    success: true,
-                    loggedIn: true, 
-                    user: req.session.user
-                });
-            } else {
-                res.json({
-                    success: false,
-                    loggedIn: false
-                });
-            }
-        } catch(err) {
-            console.error("Error fetching user:", err);
-            res.json({
-                success: true,
-                loggedIn: true, 
-                user: req.session.user
-            });
-        }
-    }else{
-        console.log("❌ User not logged in");
-        res.json({
-            success: false,
-            loggedIn: false
-        });
+
+    if (!req.session || !req.session.user) {
+        return res.json({ success: false, loggedIn: false });
     }
+
+    const userId = req.session.user._id;
+    const cacheKey = `auth:session:${userId}`;
+
+    try {
+    // 🔹 1. Check Redis
+    let cachedUser;
+    try {
+        cachedUser = await redisClient.get(cacheKey);
+    } catch (e) {
+        console.warn("Redis unavailable, skipping cache");
+    }
+    if (cachedUser) {
+      return res.json({
+        success: true,
+        loggedIn: true,
+        user: JSON.parse(cachedUser),
+        source: "redis"
+      });
+    }
+    // 🔹 2. Fetch from MongoDB
+    const user = await Users.findById(userId).select("-password");
+
+    if (!user) {
+      return res.json({ success: false, loggedIn: false });
+    }
+
+    const userData = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+
+    // 🔹 3. Store in Redis (5 mins)
+    await redisClient.setEx(
+      cacheKey,
+      300,
+      JSON.stringify(userData)
+    );
+
+    res.json({
+      success: true,
+      loggedIn: true,
+      user: userData,
+      source: "mongodb"
+    });
+
+  } catch (err) {
+    console.error("checkSession error:", err);
+    res.status(500).json({ success: false });
+  }
+
+    //without redis
+    // if(req.session && req.session.user){
+    //     console.log("✅ User logged in:", req.session.user);
+        
+    //     // Fetch fresh user data from database to get latest timestamps
+    //     try {
+    //         const user = await Users.findById(req.session.user._id).select('-password');
+    //         if(user) {
+    //             // Update session with fresh data
+    //             req.session.user = {
+    //                 _id: user._id,
+    //                 name: user.name,
+    //                 email: user.email,
+    //                 avatar: user.avatar,
+    //                 createdAt: user.createdAt,
+    //                 updatedAt: user.updatedAt
+    //             };
+                
+    //             res.json({
+    //                 success: true,
+    //                 loggedIn: true, 
+    //                 user: req.session.user
+    //             });
+    //         } else {
+    //             res.json({
+    //                 success: false,
+    //                 loggedIn: false
+    //             });
+    //         }
+    //     } catch(err) {
+    //         console.error("Error fetching user:", err);
+    //         res.json({
+    //             success: true,
+    //             loggedIn: true, 
+    //             user: req.session.user
+    //         });
+    //     }
+    // }else{
+    //     console.log("❌ User not logged in");
+    //     res.json({
+    //         success: false,
+    //         loggedIn: false
+    //     });
+    // }
 };
 
 // Get all users (without passwords)
@@ -271,6 +348,8 @@ exports.changePassword = async (req, res) => {
         // Update password
         user.password = hashedPassword;
         await user.save();
+        await redisClient.del(`auth:session:${id}`);
+
 
         res.status(200).json({
             success: true,
