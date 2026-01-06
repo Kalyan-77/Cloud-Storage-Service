@@ -4,6 +4,7 @@ import CloudConfig from '../Pages/Dashboard/Configure/cloudConfig.jsx';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Api from '../Pages/Dashboard/Configure/Api';
 import InstallApps from '../Pages/Dashboard/Configure/InstalledApps';
+import ApiConfig from '../Pages/Dashboard/Configure/Api';
 
 const ConfigPage = () => {
   const location = useLocation();
@@ -27,7 +28,7 @@ const ConfigPage = () => {
           <Routes>
             <Route index element={<CloudConfig/>} />
             <Route path="/installesapps" element={<InstallApps/>} />
-            <Route path='/api' element={<Api/>}/>
+            <Route path='/api' element={<ApiConfig/>}/>
           </Routes>
         </div>
       </main>
