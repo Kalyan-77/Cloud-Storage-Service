@@ -17,6 +17,7 @@ const configRoutes  = require('./Routes/configRoutes');
 const Apps = require('./Routes/appRoutes');
 const chatRoutes = require("./Routes/chatRoutes");
 const profileRoutes = require("./Routes/profileRoutes");
+const perplexityRoutes = require("./Routes/AIRouter");
 
 // Models
 const Message = require("./Models/Message");
@@ -86,6 +87,7 @@ app.use('/config', configRoutes);
 app.use('/apps', Apps);
 app.use('/chat', chatRoutes);
 app.use("/profile", profileRoutes);
+app.use("/perplexity", perplexityRoutes);
 
 /* ======================= HTTP + SOCKET ======================= */
 const server = http.createServer(app);

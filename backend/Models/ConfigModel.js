@@ -13,6 +13,10 @@ const configSchema = new mongoose.Schema({
     default: ''
   },
 
+  perplexity_API:{
+    type: String,
+    default: ''
+  },
   // Cloud storage configurations
   storageConfigs: [
     {
