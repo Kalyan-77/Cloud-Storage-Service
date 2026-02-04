@@ -158,7 +158,10 @@ const Login = () => {
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-3 px-6 rounded-full transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-8"
                 >
                   {loading ? (
-                    <Loading size="xs" />
+                    <div className="flex items-center gap-2">
+                      <Loading size="xs" />
+                      <span>Logging in...</span>
+                    </div>
                   ) : (
                     <>
                       Login
