@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Cloud, HardDrive, CheckCircle, Server, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../Context/AuthContext';
 import { BASE_URL } from '../../../../config';
+import Loading from '../../../Components/Loading';
 
 export default function CloudConfig() {
   const { user } = useAuth();
@@ -195,10 +196,7 @@ export default function CloudConfig() {
   if (isLoading) {
     return (
       <div className="w-full min-h-screen bg-white flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
-          <p className="text-gray-600 text-sm sm:text-base">Loading configuration...</p>
-        </div>
+        <Loading size="lg" text="Loading configuration..." />
       </div>
     );
   }
@@ -429,7 +427,7 @@ export default function CloudConfig() {
           >
             {isSaving ? (
               <>
-                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                <Loading size="sm" />
                 Saving...
               </>
             ) : (

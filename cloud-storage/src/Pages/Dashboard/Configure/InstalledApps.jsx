@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, Trash2, Check, Loader, Loader2, Save, RefreshCw, Lock } from 'lucide-react';
 import { useAuth } from '../../../Context/AuthContext';
+import Loading from '../../../Components/Loading';
 import { BASE_URL } from '../../../../config';
 
 export default function InstallApps() {
@@ -308,10 +309,7 @@ export default function InstallApps() {
   if (isLoading) {
     return (
       <div className="w-full min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
-          <p className="text-gray-600">Loading desktop apps...</p>
-        </div>
+        <Loading size="lg" text="Loading desktop apps..." />
       </div>
     );
   }
@@ -331,7 +329,7 @@ export default function InstallApps() {
     <div className="w-full bg-white min-h-screen">
       {/* Notification */}
       {notification && (
-        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top">
+        <div className="fixed top-4 right-4 z-50 slide-in-from-top">
           <div className={`px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
             notification.type === 'success' ? 'bg-green-500 text-white' :
             notification.type === 'error' ? 'bg-red-500 text-white' :
@@ -348,7 +346,7 @@ export default function InstallApps() {
         <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 sticky top-0 z-40">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
               <span className="text-sm font-medium text-yellow-800">You have unsaved changes</span>
             </div>
             <button
@@ -358,7 +356,7 @@ export default function InstallApps() {
             >
               {isSaving ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loading size="sm" />
                   Saving...
                 </>
               ) : (
@@ -387,7 +385,7 @@ export default function InstallApps() {
             disabled={isLoading}
             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition font-medium text-sm flex items-center gap-2 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className="w-4 h-4" />
             Refresh
           </button>
         </div>
@@ -498,7 +496,7 @@ export default function InstallApps() {
                         disabled
                         className="px-4 py-1.5 bg-gray-100 text-gray-400 rounded-md font-medium text-sm cursor-not-allowed flex items-center gap-1.5"
                       >
-                        <Loader className="w-3.5 h-3.5 animate-spin" />
+                        <Loader className="w-3.5 h-3.5" />
                         Installing
                       </button>
                     ) : app.installed ? (
@@ -549,7 +547,7 @@ export default function InstallApps() {
             >
               {isSaving ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loading size="sm" />
                   Saving...
                 </>
               ) : (

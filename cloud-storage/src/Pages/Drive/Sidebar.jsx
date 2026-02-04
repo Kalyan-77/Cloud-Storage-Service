@@ -261,7 +261,7 @@ const Sidebar = () => {
           <div className="text-sm font-medium text-gray-700 mb-2">Storage Used</div>
           
           {storageData.loading ? (
-            <div className="animate-pulse">
+            <div>
               <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                 <div className="bg-gray-300 h-2 rounded-full w-1/2"></div>
               </div>

@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 
 /* ================= CONFIG ================= */
 const BACKEND_URL = "http://localhost:5000";
+import Loading from './Components/Loading';
 
 /* Socket OUTSIDE component */
 const socket = io(BACKEND_URL, {
@@ -132,7 +133,7 @@ export default function Chat() {
   };
 
   /* ================= UI STATES ================= */
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6"><Loading size="md" text="Loading..." /></div>;
   if (!me) return <div className="p-6 text-red-600">Login required</div>;
 
   /* ================= RENDER ================= */

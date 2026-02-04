@@ -6,6 +6,7 @@ import axios from 'axios';
 // These imports should come from your actual files
 import { useAuth } from '../../Context/AuthContext';
 import { BASE_URL } from '../../../config';
+import Loading from '../../Components/Loading';
 
 
 export default function CloudStorageNavbar() {
@@ -238,6 +239,8 @@ export default function CloudStorageNavbar() {
           try {
             const screen = window.screen;
             const windowFeatures = [
+              'noopener',
+              'noreferrer',
               'fullscreen=yes',
               'menubar=no',
               'toolbar=no',
@@ -250,16 +253,21 @@ export default function CloudStorageNavbar() {
               'left=0',
               'top=0'
             ].join(',');
+
             const newWindow = window.open('https://mac-os-woad.vercel.app/', '_blank', windowFeatures);
-            
+
             if (newWindow) {
               newWindow.focus();
+            } else {
+              // Fallback: try opening without features (some browsers ignore features for _blank)
+              window.open('https://mac-os-woad.vercel.app/', '_blank');
             }
           } catch (error) {
             console.error('Navigation failed:', error);
+            // Last-resort fallback: navigate in the same window
             window.location.href = 'https://mac-os-woad.vercel.app/';
           }
-          
+
           return 0;
         }
         return prev - 1;
@@ -280,7 +288,9 @@ export default function CloudStorageNavbar() {
       {isLoadingMacEnvironment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-lg p-8 max-w-sm mx-4 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="mb-4">
+              <Loading size="md" />
+            </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Loading MacEnvironment
             </h3>

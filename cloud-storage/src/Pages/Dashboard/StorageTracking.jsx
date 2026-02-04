@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HardDrive, File, Trash2, RefreshCw, TrendingUp, Database, Folder, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../Context/AuthContext';
 import { BASE_URL } from '../../../config';
-import loadingGif from '../../assets/loading.gif';
+import Loading from '../../Components/Loading';
 
 const StorageTracking = () => {
   const { user } = useAuth();
@@ -127,12 +127,7 @@ const StorageTracking = () => {
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-gray-50">
-        <img 
-          src={loadingGif} 
-          alt="Loading..." 
-          className="w-44 h-44 mb-4"
-        />
-        <p className="text-gray-600 text-lg">Loading storage details...</p>
+        <Loading size="lg" text="Loading storage details..." />
       </div>
     );
   }
@@ -152,7 +147,7 @@ const StorageTracking = () => {
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className="w-4 h-4" />
               Refresh
             </button>
           </div>

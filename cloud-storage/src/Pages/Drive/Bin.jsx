@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 
 import { BASE_URL } from '../../../config';
+import Loading from '../../Components/Loading';
 
 const Bin = () => {
   const [files, setFiles] = useState([]);
@@ -316,7 +317,7 @@ const Bin = () => {
               disabled={loading}
               className="flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </button>
           </div>
@@ -399,8 +400,7 @@ const Bin = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
-              <span className="ml-3 text-lg text-gray-600">Loading files...</span>
+              <Loading size="lg" text="Loading files..." />
             </div>
           ) : filteredFiles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4">

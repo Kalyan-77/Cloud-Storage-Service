@@ -3,6 +3,7 @@ import { Upload, HardDrive, FileText, RotateCcw, BarChart3, Trash2, File, Refres
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../Context/AuthContext';
 import { BASE_URL } from '../../../config';
+import Loading from '../../Components/Loading';
 
 
 const Dashboard = () => {
@@ -256,7 +257,7 @@ const Dashboard = () => {
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className="w-4 h-4" />
               Refresh
             </button>
           </div>
@@ -264,8 +265,7 @@ const Dashboard = () => {
           {loading ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12">
               <div className="text-center">
-                <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-                <p className="text-gray-600">Loading storage details...</p>
+                <Loading size="lg" text="Loading storage details..." />
               </div>
             </div>
           ) : (

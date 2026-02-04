@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BASE_URL } from '../../config';
+import Loading from '../Components/Loading';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -78,13 +79,13 @@ const Register = () => {
       <div className="absolute inset-0 overflow-hidden">
         {/* Top electric blue wave */}
         <div className="absolute top-0 left-0 right-0 h-1">
-          <div className="w-full h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 opacity-80 animate-pulse"></div>
+          <div className="w-full h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 opacity-80"></div>
         </div>
         
-        {/* Floating animated elements */}
-        <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500 rounded-full opacity-20 animate-pulse"></div>
-        <div className="absolute top-1/4 -right-20 w-60 h-60 bg-purple-500 rounded-full opacity-20 animate-bounce" style={{animationDuration: '3s'}}></div>
-        <div className="absolute -bottom-20 left-1/4 w-80 h-80 bg-orange-500 rounded-full opacity-20 animate-pulse" style={{animationDelay: '1s'}}></div>
+        {/* Floating decorative elements */}
+        <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500 rounded-full opacity-20"></div>
+        <div className="absolute top-1/4 -right-20 w-60 h-60 bg-purple-500 rounded-full opacity-20" style={{animationDuration: '3s'}}></div>
+        <div className="absolute -bottom-20 left-1/4 w-80 h-80 bg-orange-500 rounded-full opacity-20" style={{animationDelay: '1s'}}></div>
       </div>
 
       <div className="relative z-10 w-full max-w-6xl mx-auto">
@@ -115,8 +116,8 @@ const Register = () => {
               </div>
 
               {/* Decorative elements */}
-              <div className="absolute top-8 left-8 w-16 h-16 bg-white bg-opacity-20 rounded-full animate-pulse"></div>
-              <div className="absolute bottom-8 right-8 w-10 h-10 bg-white bg-opacity-20 rounded-full animate-bounce" style={{animationDelay: '0.5s'}}></div>
+              <div className="absolute top-8 left-8 w-16 h-16 bg-white bg-opacity-20 rounded-full"></div>
+              <div className="absolute bottom-8 right-8 w-10 h-10 bg-white bg-opacity-20 rounded-full" style={{animationDelay: '0.5s'}}></div>
               
               {/* Decorative wave pattern at bottom */}
               <div className="absolute bottom-0 left-0 right-0">
@@ -234,7 +235,7 @@ const Register = () => {
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-3 px-6 rounded-full transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-8"
                 >
                   {loading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <Loading size="xs" />
                   ) : (
                     <>
                       Register

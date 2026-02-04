@@ -7,6 +7,7 @@ import {
   Share2, Heart, CheckCircle2, Circle, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { BASE_URL } from '../../../config';
+import Loading from '../../Components/Loading';
 
 const HomeCloud = () => {
   const [files, setFiles] = useState([]);
@@ -29,6 +30,8 @@ const HomeCloud = () => {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [notification, setNotification] = useState({ message: '', type: '', show: false });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null); // { id, name, url, mimeType }
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const API_BASE = `${BASE_URL}/cloud`;
 
@@ -264,6 +267,83 @@ const HomeCloud = () => {
     }
   }, [API_BASE, showNotification]);
 
+  const handleOpenPreview = useCallback(async (file) => {
+    // Show modal immediately with loading placeholder for perceived speed
+    setPreviewFile({ id: file.id, name: file.name, url: null, mimeType: file.mimeType, kind: 'loading' });
+    setPreviewLoading(true);
+
+    try {
+      // Determine kind from mimeType if available
+      const mimeHint = file.mimeType || '';
+      let kind = 'other';
+      if (mimeHint.startsWith('image')) kind = 'image';
+      else if (mimeHint.startsWith('video')) kind = 'video';
+      else if (mimeHint.startsWith('audio')) kind = 'audio';
+      else if (mimeHint === 'application/pdf') kind = 'pdf';
+      else if (mimeHint.startsWith('text')) kind = 'text';
+
+      // For media types (image/video/audio) we can stream directly by using the download URL
+      if (kind === 'image' || kind === 'video' || kind === 'audio') {
+        const url = `${API_BASE}/download/${file.id}`;
+        setPreviewFile({ id: file.id, name: file.name, url, mimeType: mimeHint, kind });
+        setPreviewLoading(false);
+        return;
+      }
+
+      // PDFs often force download due to headers; fetch as blob and create object URL so iframe can embed it
+      if (kind === 'pdf') {
+        try {
+          // revoke previous blob URL if any
+          if (previewFile?.url && typeof previewFile.url === 'string' && previewFile.url.startsWith('blob:')) {
+            try { window.URL.revokeObjectURL(previewFile.url); } catch (e) {}
+          }
+
+          const response = await fetch(`${API_BASE}/download/${file.id}`);
+          if (!response.ok) throw new Error('Failed to load pdf for preview');
+          const blob = await response.blob();
+          // ensure blob has correct mime type for embedding
+          const pdfBlob = (blob && blob.type && blob.type.includes('pdf')) ? blob : new Blob([blob], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(pdfBlob);
+          setPreviewFile({ id: file.id, name: file.name, url, mimeType: pdfBlob.type || mimeHint, kind: 'pdf' });
+          setPreviewLoading(false);
+          return;
+        } catch (err) {
+          console.error('PDF preview failed:', err);
+          // fallback to downloadable URL if blob approach fails
+          setPreviewFile({ id: file.id, name: file.name, url: `${API_BASE}/download/${file.id}`, mimeType: mimeHint, kind: 'other' });
+          setPreviewLoading(false);
+          return;
+        }
+      }
+
+      // For text we need to fetch content
+      if (kind === 'text') {
+        const response = await fetch(`${API_BASE}/download/${file.id}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Failed to load text file');
+        const blob = await response.blob();
+        const textContent = await blob.text();
+        setPreviewFile({ id: file.id, name: file.name, url: null, mimeType: blob.type, kind: 'text', textContent });
+        setPreviewLoading(false);
+        return;
+      }
+
+      // Fallback: set a streamable download url (will let user download or open in new tab)
+      setPreviewFile({ id: file.id, name: file.name, url: `${API_BASE}/download/${file.id}`, mimeType: mimeHint, kind: 'other' });
+    } catch (err) {
+      console.error('Error opening preview:', err);
+      showNotification('Failed to open preview', 'error');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [API_BASE, showNotification]);
+
+  const handleClosePreview = useCallback(() => {
+    if (previewFile?.url) {
+      try { window.URL.revokeObjectURL(previewFile.url); } catch (e) { }
+    }
+    setPreviewFile(null);
+  }, [previewFile]);
+
   const handleMakePublic = useCallback(async (fileId) => {
     try {
       const response = await fetch(`${API_BASE}/public/${fileId}`, {
@@ -319,6 +399,22 @@ const HomeCloud = () => {
     }
   }, [activeCategory, fetchFiles]);
 
+  // Close preview on Escape and cleanup object URLs
+  useEffect(() => {
+    if (!previewFile) return;
+    const onKeyDown = (e) => { if (e.key === 'Escape') handleClosePreview(); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewFile, handleClosePreview]);
+
+  useEffect(() => {
+    return () => {
+      if (previewFile?.url) {
+        try { window.URL.revokeObjectURL(previewFile.url); } catch(e) {}
+      }
+    };
+  }, [previewFile]);
+
   const getFileTypeFromName = useCallback((fileName) => {
     const extension = fileName?.split('.').pop()?.toLowerCase();
     for (const [category, extensions] of Object.entries(typeMapping)) {
@@ -327,6 +423,12 @@ const HomeCloud = () => {
       }
     }
     return 'other';
+  }, []);
+
+  const isImageFile = useCallback((fileNameOrFile) => {
+    const fileName = typeof fileNameOrFile === 'string' ? fileNameOrFile : fileNameOrFile?.name;
+    const extension = fileName?.split('.').pop()?.toLowerCase();
+    return extension && typeMapping.Images.includes(extension);
   }, []);
 
   const filteredFiles = useMemo(() => {
@@ -511,7 +613,7 @@ const HomeCloud = () => {
     if (!fileId) return null;
 
     return createPortal(
-      <div className="fixed inset-0 bg-black bg-opacity-50 bg-opacity-50 z-10 flex items-center justify-center p-4" onClick={() => setDeleteConfirm(null)}>
+      <div className="fixed inset-0 bg-black  bg-opacity-50 z-10 flex items-center justify-center p-4" onClick={() => setDeleteConfirm(null)}>
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mb-4 mx-auto">
             <Trash2 className="w-6 h-6 text-red-600" />
@@ -533,6 +635,84 @@ const HomeCloud = () => {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
+  const PreviewModal = ({ file }) => {
+    if (!file) return null;
+
+    return createPortal(
+      <div className="fixed inset-0 z-30 bg-transparent backdrop-blur-sm flex items-center justify-center p-4" onClick={handleClosePreview}>
+        <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+          {/* Unified white card for all previews */}
+          <br/>
+          <br/>
+          <div className="bg-white rounded-xl shadow-2xl overflow-hidden max-h-[85vh] w-full">
+            <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm flex items-center justify-between p-3 border-b border-gray-100">
+              <h3 className="text-sm font-medium text-gray-900 truncate max-w-[60%]">{file.name}</h3>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => { handleDownloadFile(file.id, file.name); }} className="px-3 py-1 bg-gray-100 border border-gray-200 rounded-md text-sm hover:bg-gray-200">Download</button>
+                <button onClick={handleClosePreview} className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm">Close</button>
+              </div>
+            </div>
+
+            <div className="overflow-auto p-6">
+              {previewLoading && file.kind === 'loading' ? (
+                <div className="flex items-center justify-center w-full py-16">
+                  <Loading size="lg" />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center">
+                  {/* Template container keeps a consistent layout and padding */}
+                  <div className="w-full max-w-3xl bg-white rounded-md">
+                    {file.kind === 'image' && (
+                      <div className="p-6 flex items-center justify-center bg-white">
+                        <img src={file.url} alt={file.name} className="max-h-[calc(80vh-96px)] max-w-full w-auto object-contain rounded-md shadow" />
+                      </div>
+                    )}
+
+                    {file.kind === 'video' && (
+                      <div className="p-6 bg-white">
+                        <video controls src={file.url} className="max-h-[calc(80vh-96px)] w-full rounded-md bg-black" />
+                      </div>
+                    )}
+
+                    {file.kind === 'audio' && (
+                      <div className="p-6 bg-white">
+                        <audio controls src={file.url} className="w-full" />
+                      </div>
+                    )}
+
+                    {file.kind === 'pdf' && (
+                      <div className="p-2 bg-white">
+                        <object data={file.url} type="application/pdf" className="w-full h-[80vh] rounded-md border">
+                          <div className="p-6 text-sm text-gray-700">
+                            <p>Preview not available. <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Open in new tab</a> or <button onClick={() => handleDownloadFile(file.id, file.name)} className="ml-2 px-2 py-1 bg-gray-100 rounded">Download</button>.</p>
+                          </div>
+                        </object>
+                      </div>
+                    )}
+
+                    {file.kind === 'text' && (
+                      <div className="p-6 bg-white">
+                        <pre className="max-h-[60vh] overflow-auto p-4 text-sm bg-gray-50 rounded-md w-full whitespace-pre-wrap">{file.textContent || 'Empty file'}</pre>
+                      </div>
+                    )}
+
+                    {file.kind === 'other' && (
+                      <div className="p-8 text-center text-sm text-gray-600">
+                        <p className="mb-3">Preview not available for this file type.</p>
+                        <button onClick={() => handleDownloadFile(file.id, file.name)} className="px-3 py-1 border border-gray-200 rounded-md text-sm bg-white hover:bg-gray-50">Download</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>,
@@ -574,9 +754,13 @@ const HomeCloud = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-center h-16 mb-4 bg-gray-50 rounded-lg">
+        <button
+          onClick={(e) => { e.stopPropagation(); isImageFile(file) ? handleOpenPreview(file) : handleDownloadFile(file.id, file.name); }}
+          className="flex items-center justify-center h-16 mb-4 bg-gray-50 rounded-lg w-full"
+          title={isImageFile(file) ? 'Open preview' : 'Download'}
+        >
           {getFileIcon(file.name)}
-        </div>
+        </button>
 
         <div className="space-y-1">
           <h3 className="font-medium text-gray-900 truncate text-sm" title={file.name}>
@@ -605,6 +789,7 @@ const HomeCloud = () => {
         <>
           <div className="fixed inset-0 z-40" onClick={() => { setShowDropdown(null); setDropdownAnchor(null); }} />
           <DropdownPortal anchor={dropdownAnchor}>
+            <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleOpenPreview(file); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Eye className="w-4 h-4 mr-3" />Open</button>
             <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleDownloadFile(file.id, file.name); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Download className="w-4 h-4 mr-3" />Download</button>
             <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleGenerateLink(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Link2 className="w-4 h-4 mr-3" />Get Link</button>
             <button onClick={() => { setShowDropdown(null); setDropdownAnchor(null); const newName = prompt('Enter new name:', file.name); if (newName && newName.trim() && newName !== file.name) { handleRenameFile(file.id, newName.trim()); } }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Edit3 className="w-4 h-4 mr-3" />Rename</button>
@@ -633,7 +818,9 @@ const HomeCloud = () => {
       </button>
       
       <div className="flex items-center space-x-3 flex-1 min-w-0">
-        {getFileIcon(file.name)}
+        <button onClick={(e) => { e.stopPropagation(); isImageFile(file) ? handleOpenPreview(file) : handleDownloadFile(file.id, file.name); }} className="flex items-center justify-center w-10 h-10 bg-gray-50 rounded-md">
+          {getFileIcon(file.name)}
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-2">
             <p className="text-sm font-medium text-gray-900 truncate" title={file.name}>
@@ -664,6 +851,7 @@ const HomeCloud = () => {
             <>
               <div className="fixed inset-0 z-40" onClick={() => { setShowDropdown(null); setDropdownAnchor(null); }} />
               <DropdownPortal anchor={dropdownAnchor}>
+                <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleOpenPreview(file); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Eye className="w-4 h-4 mr-3" />Open</button>
                 <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleDownloadFile(file.id, file.name); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Download className="w-4 h-4 mr-3" />Download</button>
                 <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleGenerateLink(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Link2 className="w-4 h-4 mr-3" />Get Link</button>
                 <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); const newName = prompt('Enter new name:', file.name); if (newName && newName.trim() && newName !== file.name) { handleRenameFile(file.id, newName.trim()); } }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Edit3 className="w-4 h-4 mr-3" />Rename</button>
@@ -680,6 +868,7 @@ const HomeCloud = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <DeleteConfirmModal fileId={deleteConfirm} />
+      <PreviewModal file={previewFile} />
       
       {notification.show && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border flex items-center space-x-2 transition-all duration-300 ${
@@ -715,7 +904,7 @@ const HomeCloud = () => {
               disabled={loading}
               className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
             >
-              {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : 'Search'}
+              {loading ? <Loading size="sm" /> : 'Search'}
             </button>
           </div>
         </div>
@@ -735,9 +924,9 @@ const HomeCloud = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
                   {recentFiles.slice(0, 8).map((file, index) => (
                     <div key={file.id} className="group relative bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                      <div className="flex items-center justify-center h-12 mb-3">
+                      <button onClick={(e) => { e.stopPropagation(); isImageFile(file) ? handleOpenPreview(file) : handleDownloadFile(file.id, file.name); }} className="flex items-center justify-center h-12 mb-3 w-full">
                         {getFileIcon(file.name)}
-                      </div>
+                      </button>
                       <div className="text-center">
                         <h4 className="text-sm font-medium text-gray-900 truncate" title={file.name}>
                           {file.name}
@@ -758,6 +947,7 @@ const HomeCloud = () => {
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => { setShowDropdown(null); setDropdownAnchor(null); }} />
                           <DropdownPortal anchor={dropdownAnchor}>
+                            <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleOpenPreview(file); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Eye className="w-4 h-4 mr-3" />Open</button>
                             <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleDownloadFile(file.id, file.name); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Download className="w-4 h-4 mr-3" />Download</button>
                             <button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); handleGenerateLink(file.id); }} className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 w-full text-left transition-colors"><Link2 className="w-4 h-4 mr-3" />Get Link</button>
                             <div className="border-t border-gray-100"><button type="button" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { setShowDropdown(null); setDropdownAnchor(null); setDeleteConfirm(file.id); }} className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 w-full text-left transition-colors"><Trash2 className="w-4 h-4 mr-3" />Move to Trash</button></div>
@@ -914,8 +1104,7 @@ const HomeCloud = () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
                 <div className="flex items-center justify-center py-16">
-                  <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-                  <span className="ml-3 text-lg text-gray-600">Loading files...</span>
+                  <Loading size="lg" text="Loading files..." />
                 </div>
               ) : filteredFiles.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 px-4">
