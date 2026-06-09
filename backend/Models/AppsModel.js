@@ -35,7 +35,9 @@ const appSchema = new mongoose.Schema({
   icon: {
     type: String,   // emoji or URL
     required: true
-  }
+  },
+  
+
 }, { timestamps: true });
 
 // exporting model

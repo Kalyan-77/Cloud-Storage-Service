@@ -5,6 +5,34 @@ const redisClient = require('../Config/redis');
 
 const router = express.Router();
 
+const safeRedisGet = async (key) => {
+    if (!redisClient) return null;
+    try {
+        return await redisClient.get(key);
+    } catch (err) {
+        console.warn('Redis GET failed:', err.message);
+        return null;
+    }
+};
+
+const safeRedisSetWithTtl = async (key, seconds, value) => {
+    if (!redisClient) return;
+    try {
+        await redisClient.setEx(key, seconds, value);
+    } catch (err) {
+        console.warn('Redis SETEX failed:', err.message);
+    }
+};
+
+const safeRedisDel = async (key) => {
+    if (!redisClient) return;
+    try {
+        await redisClient.del(key);
+    } catch (err) {
+        console.warn('Redis DEL failed:', err.message);
+    }
+};
+
 //Register
 exports.register = async (req, res)=>{
     const {name, email, password} = req.body;
@@ -127,7 +155,7 @@ exports.UpdateUser = async(req, res) =>{
             };
         }
         // Clear Redis cache
-        await redisClient.del(`auth:session:${id}`);
+        await safeRedisDel(`auth:session:${id}`);
 
         res.status(200).json({
             success: true,
@@ -169,7 +197,7 @@ exports.Delete = async (req, res) => {
 
 exports.Logout = async(req, res) =>{
     if (req.session?.user?._id) {
-        await redisClient.del(`auth:session:${req.session.user._id}`);
+        await safeRedisDel(`auth:session:${req.session.user._id}`);
     }
 
     req.session.destroy((err) => {
@@ -208,20 +236,20 @@ exports.checkSession = async(req, res) =>{
     const cacheKey = `auth:session:${userId}`;
 
     try {
-    // 🔹 1. Check Redis
-    let cachedUser;
-    try {
-        cachedUser = await redisClient.get(cacheKey);
-    } catch (e) {
-        console.warn("Redis unavailable, skipping cache");
-    }
+        // 🔹 1. Check Redis cache (best effort)
+        const cachedUser = await safeRedisGet(cacheKey);
     if (cachedUser) {
+            try {
+                const parsedUser = JSON.parse(cachedUser);
       return res.json({
         success: true,
         loggedIn: true,
-        user: JSON.parse(cachedUser),
+                user: parsedUser,
         source: "redis"
       });
+            } catch (e) {
+                console.warn('Redis cached user JSON parse failed:', e.message);
+            }
     }
     // 🔹 2. Fetch from MongoDB
     const user = await Users.findById(userId).select("-password");
@@ -239,12 +267,8 @@ exports.checkSession = async(req, res) =>{
       updatedAt: user.updatedAt
     };
 
-    // 🔹 3. Store in Redis (5 mins)
-    await redisClient.setEx(
-      cacheKey,
-      300,
-      JSON.stringify(userData)
-    );
+        // 🔹 3. Store in Redis (5 mins) - best effort
+        await safeRedisSetWithTtl(cacheKey, 300, JSON.stringify(userData));
 
     res.json({
       success: true,
@@ -348,7 +372,7 @@ exports.changePassword = async (req, res) => {
         // Update password
         user.password = hashedPassword;
         await user.save();
-        await redisClient.del(`auth:session:${id}`);
+        await safeRedisDel(`auth:session:${id}`);
 
 
         res.status(200).json({
