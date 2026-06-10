@@ -8,7 +8,11 @@ exports.createApp = async (req, res) => {
   try {
     const newApp = new App(req.body);
     await newApp.save();
-    await redisClient.del("apps:all");
+    try {
+      await redisClient.del("apps:all");
+    } catch {
+      console.warn("Redis unavailable, skipping apps cache invalidation");
+    }
 
 
     res.status(201).json({
@@ -52,11 +56,15 @@ exports.getAllApps = async (req, res) => {
     const apps = await App.find();
 
     // 3️⃣ Save to Redis (10 minutes)
-    await redisClient.setEx(
-      cacheKey,
-      600,
-      JSON.stringify(apps)
-    );
+    try {
+      await redisClient.setEx(
+        cacheKey,
+        600,
+        JSON.stringify(apps)
+      );
+    } catch {
+      console.warn("Redis unavailable, skipping apps cache write");
+    }
 
     res.json({
       success: true,
@@ -113,11 +121,15 @@ exports.getAppById = async (req, res) => {
     }
 
     // 3️⃣ Cache result
-    await redisClient.setEx(
-      cacheKey,
-      600,
-      JSON.stringify(app)
-    );
+    try {
+      await redisClient.setEx(
+        cacheKey,
+        600,
+        JSON.stringify(app)
+      );
+    } catch {
+      console.warn("Redis unavailable, skipping app cache write");
+    }
 
     res.json({
       success: true,
@@ -168,8 +180,12 @@ exports.updateApp = async (req, res) => {
       });
     }
 
-    await redisClient.del("apps:all");
-    await redisClient.del(`apps:${req.params.id}`);
+    try {
+      await redisClient.del("apps:all");
+      await redisClient.del(`apps:${req.params.id}`);
+    } catch {
+      console.warn("Redis unavailable, skipping apps cache invalidation");
+    }
 
 
     res.status(200).json({
@@ -200,8 +216,12 @@ exports.deleteApp = async (req, res) => {
       });
     }
 
-    await redisClient.del("apps:all");
-    await redisClient.del(`apps:${req.params.id}`);
+    try {
+      await redisClient.del("apps:all");
+      await redisClient.del(`apps:${req.params.id}`);
+    } catch {
+      console.warn("Redis unavailable, skipping apps cache invalidation");
+    }
 
 
     res.status(200).json({

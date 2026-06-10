@@ -61,7 +61,12 @@ exports.saveConfig = async (req, res) => {
     }
 
     await config.save();
-    await redisClient.del(`config:${userId}`);
+
+    try {
+      await redisClient.del(`config:${userId}`);
+    } catch {
+      console.warn("Redis unavailable, skipping config cache invalidation");
+    }
 
     console.log('Config saved successfully');
     console.log('=== End Save Config Backend ===');
@@ -119,12 +124,16 @@ exports.getConfig = async (req, res) => {
       return res.status(404).json({ message: 'No configuration found' });
     }
 
-    // 3️⃣ Cache for 10 minutes
-    await redisClient.setEx(
-      cacheKey,
-      600,
-      JSON.stringify(config)
-    );
+    // 3️⃣ Cache for 10 minutes, but do not fail the request if Redis is down
+    try {
+      await redisClient.setEx(
+        cacheKey,
+        600,
+        JSON.stringify(config)
+      );
+    } catch {
+      console.warn("Redis unavailable, skipping config cache write");
+    }
 
     // Mask API key in response
     const responseConfig = config.toObject();
@@ -156,7 +165,11 @@ exports.deleteConfig = async (req, res) => {
       return res.status(404).json({ message: 'No configuration found to delete' });
     }
 
-    await redisClient.del(`config:${userId}`);
+    try {
+      await redisClient.del(`config:${userId}`);
+    } catch {
+      console.warn("Redis unavailable, skipping config cache invalidation");
+    }
 
     res.status(200).json({ 
       message: 'Configuration deleted successfully',

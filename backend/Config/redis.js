@@ -24,13 +24,21 @@ if (!process.env.REDIS_URL) {
   console.warn("⚠️ REDIS_URL not set. Redis disabled.");
 }
 
-const redisClient = process.env.REDIS_URL
+const redisUrl = process.env.REDIS_URL;
+const redisProtocol = redisUrl ? new URL(redisUrl).protocol : null;
+const useTls = redisProtocol === "rediss:";
+
+const redisClient = redisUrl
   ? createClient({
-      url: process.env.REDIS_URL,
-      socket: {
-        tls: true,          // REQUIRED for Upstash
-        rejectUnauthorized: false
-      }
+      url: redisUrl,
+      ...(useTls
+        ? {
+            socket: {
+              tls: true,
+              rejectUnauthorized: false
+            }
+          }
+        : {})
     })
   : null;
 
