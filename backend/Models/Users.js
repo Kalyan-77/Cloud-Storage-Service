@@ -19,7 +19,26 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: "" // image URL
   },
-  about: {
+googleId: {
+    type: String,
+    default: null
+},
+
+googleAccessToken: {
+    type: String,
+    default: null
+},
+
+googleRefreshToken: {
+    type: String,
+    default: null
+},
+authProvider: {
+    type: String,
+    enum: ["local","google"],
+    default: "local"
+},
+about: {
     type: String,
     default: "Hey there! I am using Chat"
   }

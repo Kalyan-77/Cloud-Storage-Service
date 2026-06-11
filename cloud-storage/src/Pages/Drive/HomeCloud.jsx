@@ -62,7 +62,9 @@ const HomeCloud = () => {
   const fetchFiles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/files`);
+      const response = await fetch(`${API_BASE}/files`,{
+        credentials: "include"
+      });
       if (!response.ok) throw new Error('Failed to fetch files');
       const data = await response.json();
       
@@ -91,7 +93,9 @@ const HomeCloud = () => {
   const fetchFilesByType = useCallback(async (type) => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/files/type?type=${type}`);
+      const response = await fetch(`${API_BASE}/files/type?type=${type}`,{
+        credentials: "include"
+      });
       if (!response.ok) throw new Error('Failed to fetch files by type');
       const data = await response.json();
       
@@ -119,8 +123,12 @@ const HomeCloud = () => {
   const fetchStats = useCallback(async () => {
     try {
       const [filesCountRes, storageRes] = await Promise.all([
-        fetch(`${API_BASE}/filesCount`),
-        fetch(`${API_BASE}/totalStorage`)
+        fetch(`${API_BASE}/filesCount`,{
+          credentials: "include"
+        }),
+        fetch(`${API_BASE}/totalStorage`,{
+          credentials: "include"
+        })
       ]);
 
       if (filesCountRes.ok) {
@@ -151,7 +159,9 @@ const HomeCloud = () => {
     
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/search?name=${encodeURIComponent(searchTerm)}`);
+      const response = await fetch(`${API_BASE}/search?name=${encodeURIComponent(searchTerm)}`,{
+        credentials: "include"
+      });
       if (!response.ok) throw new Error('Search failed');
       const data = await response.json();
       
@@ -188,6 +198,7 @@ const HomeCloud = () => {
       const response = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
         body: formData,
+        credentials: "include"
       });
 
       if (!response.ok) throw new Error('Upload failed');
@@ -208,6 +219,7 @@ const HomeCloud = () => {
     try {
       const response = await fetch(`${API_BASE}/trash/${fileId}`, {
         method: 'PUT',
+        credentials: "include"
       });
 
       if (!response.ok) throw new Error('Move to trash failed');
@@ -232,7 +244,9 @@ const HomeCloud = () => {
 
   const handleDownloadFile = useCallback(async (fileId, fileName) => {
     try {
-      const response = await fetch(`${API_BASE}/download/${fileId}`);
+      const response = await fetch(`${API_BASE}/download/${fileId}`,{
+        credentials: "include"
+      });
       if (!response.ok) throw new Error('Download failed');
       
       const blob = await response.blob();
@@ -254,7 +268,9 @@ const HomeCloud = () => {
 
   const handleGenerateLink = useCallback(async (fileId) => {
     try {
-      const response = await fetch(`${API_BASE}/generate-link/${fileId}`);
+      const response = await fetch(`${API_BASE}/generate-link/${fileId}`,{
+        credentials: "include"
+      });
       if (!response.ok) throw new Error('Link generation failed');
       
       const data = await response.json();
@@ -298,7 +314,9 @@ const HomeCloud = () => {
             try { window.URL.revokeObjectURL(previewFile.url); } catch (e) {}
           }
 
-          const response = await fetch(`${API_BASE}/download/${file.id}`);
+          const response = await fetch(`${API_BASE}/download/${file.id}`,{
+            credentials: "include"
+          });
           if (!response.ok) throw new Error('Failed to load pdf for preview');
           const blob = await response.blob();
           // ensure blob has correct mime type for embedding
@@ -318,7 +336,7 @@ const HomeCloud = () => {
 
       // For text we need to fetch content
       if (kind === 'text') {
-        const response = await fetch(`${API_BASE}/download/${file.id}`, { cache: 'no-store' });
+        const response = await fetch(`${API_BASE}/download/${file.id}`, { cache: 'no-store', credentials: 'include' });
         if (!response.ok) throw new Error('Failed to load text file');
         const blob = await response.blob();
         const textContent = await blob.text();
@@ -348,6 +366,7 @@ const HomeCloud = () => {
     try {
       const response = await fetch(`${API_BASE}/public/${fileId}`, {
         method: 'POST',
+        credentials: 'include'
       });
 
       if (!response.ok) throw new Error('Failed to make file public');
@@ -371,6 +390,7 @@ const HomeCloud = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ name: newName }),
+        credentials: 'include'
       });
 
       if (!response.ok) throw new Error('Rename failed');

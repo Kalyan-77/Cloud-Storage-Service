@@ -9,6 +9,11 @@ import Loading from '../../Components/Loading';
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [driveConnectionState, setDriveConnectionState] = useState({
+    connected: true,
+    message: ''
+  });
+  const [errorMessage, setErrorMessage] = useState('');
   
   const [storageData, setStorageData] = useState({
     usage: '0 GB',
@@ -84,29 +89,91 @@ const Dashboard = () => {
     fetchStorageDetails();
   }, []);
 
+  const handleConnectGoogleDrive = () => {
+    window.location.href = `${BASE_URL}/auth/google/connect`;
+  };
+
   const fetchStorageDetails = async () => {
     setLoading(true);
+    setErrorMessage('');
+    setDriveConnectionState({ connected: true, message: '' });
     try {
       // Fetch total storage
-      const storageRes = await fetch(`${BASE_URL}/cloud/totalStorage`);
-      const storageJson = await storageRes.json();
+      const storageRes = await fetch(`${BASE_URL}/cloud/totalStorage`,{
+        credentials: "include"
+      });
+      const storageJson = await storageRes.json().catch(() => ({}));
+
+      if (storageJson.connected === false) {
+        setDriveConnectionState({
+          connected: false,
+          message: storageJson.message || 'Google Drive not connected'
+        });
+        setStorageData({
+          usage: '0 GB',
+          limit: '0 GB',
+          usageInDrive: '0 GB',
+          usageInDriveTrash: '0 GB'
+        });
+        setFileStats([]);
+        setTotalFiles(0);
+        return;
+      }
+
+      if (!storageRes.ok) {
+        throw new Error(storageJson.error || storageJson.message || 'Failed to load storage details');
+      }
       setStorageData(storageJson);
 
       // Fetch total file count
-      const countRes = await fetch(`${BASE_URL}/cloud/filesCount`);
-      const countJson = await countRes.json();
+      const countRes = await fetch(`${BASE_URL}/cloud/filesCount`,{
+        credentials: "include"
+      });
+      const countJson = await countRes.json().catch(() => ({}));
+
+      if (countJson.connected === false) {
+        setDriveConnectionState({
+          connected: false,
+          message: countJson.message || 'Google Drive not connected'
+        });
+        setStorageData({
+          usage: '0 GB',
+          limit: '0 GB',
+          usageInDrive: '0 GB',
+          usageInDriveTrash: '0 GB'
+        });
+        setFileStats([]);
+        setTotalFiles(0);
+        return;
+      }
+
+      if (!countRes.ok) {
+        throw new Error(countJson.error || countJson.message || 'Failed to load file count');
+      }
       setTotalFiles(countJson.totalFiles || 0);
 
       // Fetch file counts and storage by type
       const statsPromises = fileTypes.map(async (ft) => {
         try {
           const [countRes, storageRes] = await Promise.all([
-            fetch(`${BASE_URL}/cloud/filesCount/type?type=${ft.type}`),
-            fetch(`${BASE_URL}/cloud/StorageByType/type?type=${ft.type}`)
+            fetch(`${BASE_URL}/cloud/filesCount/type?type=${ft.type}`,{
+              credentials: "include"
+            }),
+            fetch(`${BASE_URL}/cloud/StorageByType/type?type=${ft.type}`,{
+              credentials: "include"
+            })
           ]);
           
-          const countData = await countRes.json();
-          const storageData = await storageRes.json();
+          const countData = await countRes.json().catch(() => ({}));
+          const storageData = await storageRes.json().catch(() => ({}));
+
+          if (countData.connected === false || storageData.connected === false) {
+            setDriveConnectionState({
+              connected: false,
+              message: countData.message || storageData.message || 'Google Drive not connected'
+            });
+            return null;
+          }
           
           return {
             type: ft.type,
@@ -127,9 +194,15 @@ const Dashboard = () => {
       });
 
       const stats = await Promise.all(statsPromises);
+      if (stats.some(stat => stat === null)) {
+        setFileStats([]);
+        setTotalFiles(0);
+        return;
+      }
       setFileStats(stats);
     } catch (error) {
       console.error('Error fetching storage details:', error);
+      setErrorMessage(error.message || 'Unable to load storage details');
     } finally {
       setLoading(false);
     }
@@ -142,6 +215,7 @@ const Dashboard = () => {
   };
 
   const parseStorage = (storageStr) => {
+    if (!storageStr || typeof storageStr !== 'string') return 0;
     const match = storageStr.match(/(\d+\.?\d*)\s*(Bytes|KB|MB|GB|TB)/);
     if (!match) return 0;
     const value = parseFloat(match[1]);
@@ -158,7 +232,7 @@ const Dashboard = () => {
   };
 
   const calculateFilePercentages = () => {
-    if (totalFiles === 0) return fileStats.map(stat => ({ ...stat, percentage: 0 }));
+    if (totalFiles === 0 || !Array.isArray(fileStats)) return [];
     return fileStats.map(stat => ({
       ...stat,
       percentage: ((stat.count / totalFiles) * 100).toFixed(1)
@@ -172,8 +246,8 @@ const Dashboard = () => {
   const remainingGB = limitGB - usageGB;
 
   // Calculate total used percentage for the donut chart
-  const totalUsedPercentage = filePercentages.reduce((acc, stat) => acc + parseFloat(stat.percentage), 0);
-  const emptyPercentage = 100 - totalUsedPercentage;
+  const totalUsedPercentage = filePercentages.reduce((acc, stat) => acc + Number(stat.percentage || 0), 0);
+  const emptyPercentage = Math.max(0, 100 - totalUsedPercentage);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -262,10 +336,42 @@ const Dashboard = () => {
             </button>
           </div>
 
-          {loading ? (
+          {driveConnectionState.connected === false ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+              <div className="max-w-2xl mx-auto text-center space-y-5">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                  <HardDrive className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Google Drive Not Connected</h3>
+                  <p className="mt-2 text-gray-600">Connect your Google Drive account to start using cloud storage.</p>
+                  {driveConnectionState.message && (
+                    <p className="mt-2 text-sm text-gray-500">{driveConnectionState.message}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleConnectGoogleDrive}
+                  className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  Connect Google Drive
+                </button>
+              </div>
+            </div>
+          ) : loading ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12">
               <div className="text-center">
                 <Loading size="lg" text="Loading storage details..." />
+              </div>
+            </div>
+          ) : errorMessage ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-red-200 p-8">
+              <div className="flex items-start gap-3 text-red-700">
+                <AlertCircle className="w-5 h-5 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Unable to load storage details</p>
+                  <p className="text-sm text-red-600 mt-1">{errorMessage}</p>
+                </div>
               </div>
             </div>
           ) : (

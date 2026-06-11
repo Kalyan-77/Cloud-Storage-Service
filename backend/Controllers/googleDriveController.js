@@ -1,32 +1,65 @@
 const { google } = require('googleapis');
 const fs = require('fs');
 const stream = require("stream");
+const Users = require("../Models/Users");
 
 
-const oauth2Client = new google.auth.OAuth2(
-    process.env.CLIENT_ID,
-    process.env.CLIENT_SECRET,
-    process.env.REDIRECT_URI
-);
+// const oauth2Client = new google.auth.OAuth2(
+//     process.env.CLIENT_ID,
+//     process.env.CLIENT_SECRET,
+//     process.env.REDIRECT_URI
+// );
 
-console.log("ID: " , process.env.CLIENT_ID);
-console.log("Secret : " , process.env.CLIENT_SECRET);
-console.log("URL : " , process.env.REDIRECT_URI);
-console.log("refresh_token : " , process.env.REFRESH_TOKEN);
+// console.log("ID: " , process.env.CLIENT_ID);
+// console.log("Secret : " , process.env.CLIENT_SECRET);
+// console.log("URL : " , process.env.REDIRECT_URI);
+// console.log("refresh_token : " , process.env.REFRESH_TOKEN);
 
 
 
-oauth2Client.setCredentials({ refresh_token: process.env.REFRESH_TOKEN });
+// oauth2Client.setCredentials({ refresh_token: process.env.REFRESH_TOKEN });
 
-function getDrive() {
-    return google.drive({ version: 'v3', auth: oauth2Client });
+// function getDrive() {
+//     return google.drive({ version: 'v3', auth: oauth2Client });
+// }
+
+async function getDrive(userId){
+
+    const user = await Users.findById(userId);
+
+    if(!user){
+        throw new Error("User not found");
+    }
+
+    if(!user.googleRefreshToken){
+    const driveError = new Error("DRIVE_NOT_CONNECTED");
+    driveError.code = "DRIVE_NOT_CONNECTED";
+    throw driveError;
+    }
+
+    const oauth2Client =
+      new google.auth.OAuth2(
+        process.env.CLIENT_ID,
+        process.env.CLIENT_SECRET,
+        process.env.GOOGLE_CALLBACK_URL
+      );
+
+    oauth2Client.setCredentials({
+      refresh_token:
+      user.googleRefreshToken
+    });
+
+    return google.drive({
+      version:"v3",
+      auth:oauth2Client
+    });
 }
 
 //Display All the include trash
 
 // exports.listAllFiles = async (req, res) => {
 //   try {
-//     const drive = getDrive();
+//     const drive = await getDrive(req.session.user._id);
 //     const response = await drive.files.list({
 //       pageSize: 50,
 //       fields: "files(id, name, mimeType, webViewLink, webContentLink, createdTime)",
@@ -55,7 +88,8 @@ function getDrive() {
 // List files exclude Trash
 exports.listAllFiles = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
+
     const response = await drive.files.list({
       pageSize: 50,
       fields: "files(id, name, mimeType, size, webViewLink, webContentLink, createdTime, modifiedTime)",
@@ -85,6 +119,12 @@ exports.listAllFiles = async (req, res) => {
 
     res.json(files);
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error listing files:", err);
     res.status(500).json({ error: err.message });
   }
@@ -100,7 +140,7 @@ exports.uploadFile = async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const bufferStream = new stream.PassThrough();
     bufferStream.end(req.file.buffer);
     const response = await drive.files.create({
@@ -132,6 +172,12 @@ exports.uploadFile = async (req, res) => {
     });
 
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Upload error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -141,7 +187,8 @@ exports.uploadFile = async (req, res) => {
 // Make file public
 exports.makeFilePublic = async (req, res) => {
     try {
-        const drive = getDrive();
+        const drive = await getDrive(req.session.user._id);
+
         await drive.permissions.create({
             fileId: req.params.fileId,
             requestBody: { role: 'reader', type: 'anyone' },
@@ -152,6 +199,12 @@ exports.makeFilePublic = async (req, res) => {
         });
         res.json(result.data);
     } catch (err) {
+          if (err.message === "DRIVE_NOT_CONNECTED") {
+              return res.status(400).json({
+                connected: false,
+                message: "Google Drive not connected"
+              });
+          }
         res.status(500).json({ error: err.message });
     }
 };
@@ -159,10 +212,16 @@ exports.makeFilePublic = async (req, res) => {
 // Delete file
 exports.deleteFile = async (req, res) => {
     try {
-        const drive = getDrive();
+        const drive = await getDrive(req.session.user._id);
         await drive.files.delete({ fileId: req.params.fileId });
         res.json({ success: true });
     } catch (err) {
+          if (err.message === "DRIVE_NOT_CONNECTED") {
+              return res.status(400).json({
+                connected: false,
+                message: "Google Drive not connected"
+              });
+          }
         res.status(500).json({ error: err.message });
     }
 };
@@ -170,7 +229,7 @@ exports.deleteFile = async (req, res) => {
 // Download file
 exports.downloadFile = async (req, res) => {
     try {
-        const drive = getDrive();
+        const drive = await getDrive(req.session.user._id);
         const file = await drive.files.get({ fileId: req.params.fileId, fields: 'name' });
         const fileName = file.data.name;
 
@@ -182,6 +241,18 @@ exports.downloadFile = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         driveRes.data.pipe(res);
     } catch (err) {
+      if (err.message === "DRIVE_NOT_CONNECTED") {
+        return res.status(400).json({
+          connected: false,
+          message: "Google Drive not connected"
+        });
+      }
+      if (err.message === "DRIVE_NOT_CONNECTED") {
+        return res.status(400).json({
+          connected: false,
+          message: "Google Drive not connected"
+        });
+      }
         res.status(500).json({ error: err.message });
     }
 };
@@ -238,7 +309,7 @@ exports.listFilesByType = async (req, res) => {
       return res.status(400).json({ error: "Unsupported file type" });
     }
 
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const response = await drive.files.list({
       pageSize: 50,
       fields: "files(id, name, mimeType, size, webViewLink, webContentLink, createdTime, modifiedTime)",
@@ -328,7 +399,7 @@ exports.listFilesByCategory = async (req, res) => {
       return res.status(400).json({ error: "Unsupported category" });
     }
 
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
 
     // Build query string for mimeTypes
     const mimeQuery = categoryMimeTypes[category]
@@ -368,7 +439,7 @@ exports.listFilesByCategory = async (req, res) => {
 // Count all files
 exports.countAllFiles = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const response = await drive.files.list({
       pageSize: 1000, // Google Drive API max is 1000 per request
       fields: "files(id)"
@@ -377,6 +448,12 @@ exports.countAllFiles = async (req, res) => {
     const count = response.data.files.length;
     res.json({ totalFiles: count });
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error counting files:", err);
     res.status(500).json({ error: err.message });
   }
@@ -403,7 +480,7 @@ exports.countFilesByType = async (req, res) => {
       return res.status(400).json({ error: "Unsupported file type" });
     }
 
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const response = await drive.files.list({
       pageSize: 1000,
       fields: "files(id)",
@@ -413,6 +490,12 @@ exports.countFilesByType = async (req, res) => {
     const count = response.data.files.length;
     res.json({ fileType, totalFiles: count });
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error counting files by type:", err);
     res.status(500).json({ error: err.message });
   }
@@ -430,7 +513,7 @@ function formatBytes(bytes) {
 
 exports.getStorageUsage = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const response = await drive.about.get({ fields: "storageQuota" });
     const quota = response.data.storageQuota;
 
@@ -441,6 +524,12 @@ exports.getStorageUsage = async (req, res) => {
       usageInDriveTrash: formatBytes(parseInt(quota.usageInDriveTrash))
     });
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error fetching storage usage:", err);
     res.status(500).json({ error: err.message });
   }
@@ -467,7 +556,7 @@ function formatBytes(bytes) {
 
 exports.getStorageByType = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const { type } = req.query; // <-- query param like ?type=ppt or ?type=png
 
     // Fetch files with size + mimeType
@@ -522,6 +611,12 @@ exports.getStorageByType = async (req, res) => {
       storage: formatBytes(totalSize)
     });
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error fetching storage by type:", err);
     res.status(500).json({ error: err.message });
   }
@@ -534,7 +629,7 @@ exports.searchFilesByName = async (req, res) => {
       return res.status(400).json({ error: "Please provide a name to search" });
     }
 
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const response = await drive.files.list({
       pageSize: 50,
       fields: "files(id, name, mimeType, size, webViewLink, webContentLink, createdTime, modifiedTime)",
@@ -571,7 +666,7 @@ exports.searchFilesByName = async (req, res) => {
 // Generate public link for a file
 exports.generateFileLink = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const fileId = req.params.fileId;
 
     // Make file public (anyone with link can view)
@@ -602,7 +697,7 @@ exports.generateFileLink = async (req, res) => {
 // Update file name
 exports.updateFileName = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const fileId = req.params.fileId;
     const newName = req.body.name; // send { "name": "newFileName.txt" } in body
 
@@ -624,6 +719,12 @@ exports.updateFileName = async (req, res) => {
       file: response.data
     });
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error renaming file:", err);
     res.status(500).json({ error: err.message });
   }
@@ -632,7 +733,7 @@ exports.updateFileName = async (req, res) => {
 // List all trashed files (files in Bin)
 exports.listTrashedFiles = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const response = await drive.files.list({
       pageSize: 50,
       fields: "files(id, name, mimeType, size, webViewLink, webContentLink, createdTime, modifiedTime)",
@@ -661,6 +762,12 @@ exports.listTrashedFiles = async (req, res) => {
 
     res.json(files);
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error listing trashed files:", err);
     res.status(500).json({ error: err.message });
   }
@@ -668,7 +775,7 @@ exports.listTrashedFiles = async (req, res) => {
 // Move a file to trash (Bin)
 exports.moveFileToTrash = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const fileId = req.params.fileId;
 
     if (!fileId) {
@@ -687,6 +794,12 @@ exports.moveFileToTrash = async (req, res) => {
       file: response.data
     });
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error moving file to trash:", err);
     res.status(500).json({ error: err.message });
   }
@@ -696,7 +809,7 @@ exports.moveFileToTrash = async (req, res) => {
 // Restore file from trash
 exports.restoreFileFromTrash = async (req, res) => {
   try {
-    const drive = getDrive(); // use your existing getDrive function
+    const drive = await getDrive(req.session.user._id); // use your existing getDrive function
     const fileId = req.params.fileId;
 
     const response = await drive.files.update({
@@ -710,6 +823,12 @@ exports.restoreFileFromTrash = async (req, res) => {
       file: response.data
     });
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error restoring file from trash:", err);
     res.status(500).json({ error: err.message });
   }
@@ -717,9 +836,9 @@ exports.restoreFileFromTrash = async (req, res) => {
 
 
 // Upload file directly from buffer (for text file creation)
-exports.uploadFileFromBuffer = async (fileObj) => {
+exports.uploadFileFromBuffer = async (userId,fileObj) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(userId);
 
     // Convert Buffer → Stream
     const bufferStream = new stream.PassThrough();
@@ -750,9 +869,9 @@ exports.uploadFileFromBuffer = async (fileObj) => {
 };
 
 // Update file content on Google Drive
-exports.updateFileContent = async (fileId, buffer, mimeType) => {
+exports.updateFileContent = async (userId, fileId, buffer, mimeType) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(userId);
 
     const bufferStream = new stream.PassThrough();
     bufferStream.end(buffer);
@@ -776,7 +895,7 @@ exports.updateFileContent = async (fileId, buffer, mimeType) => {
 // Stream or display file content (images, videos, text, etc.)
 exports.displayFileContent = async (req, res) => {
   try {
-    const drive = getDrive();
+    const drive = await getDrive(req.session.user._id);
     const fileId = req.params.fileId;
 
     if (!fileId) {
@@ -803,6 +922,12 @@ exports.displayFileContent = async (req, res) => {
     // Stream directly to browser
     fileStream.data.pipe(res);
   } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
     console.error("Error displaying file content:", err);
     res.status(500).json({ error: err.message });
   }

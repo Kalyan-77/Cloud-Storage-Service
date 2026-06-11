@@ -22,6 +22,7 @@ const perplexityRoutes = require("./Routes/AIRouter");
 // Models
 const Message = require("./Models/Message");
 const redisClient = require("./Config/redis");
+const passport = require('./Config/passport');
 
 const app = express();
 
@@ -78,6 +79,8 @@ const sessionMiddleware = session({
 });
 
 app.use(sessionMiddleware);
+app.use(passport.initialize());
+app.use(passport.session());
 
 /* ======================= Routes ======================= */
 app.use('/auth', auth);

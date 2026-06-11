@@ -1,24 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Cloud, HardDrive, CheckCircle, Server, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Cloud, HardDrive, CheckCircle, Server, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../Context/AuthContext';
 import { BASE_URL } from '../../../../config';
 import Loading from '../../../Components/Loading';
 
 export default function CloudConfig() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [storageType, setStorageType] = useState('GoogleDrive');
-  const [clientId, setClientId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
-  const [refreshToken, setRefreshToken] = useState('');
-  const [redirectUrl, setRedirectUrl] = useState('');
   const [storagePath, setStoragePath] = useState('');
   const [ipAddress, setIpAddress] = useState('');
   const [ipStatus, setIpStatus] = useState(null);
   const [isCheckingIp, setIsCheckingIp] = useState(false);
-  const [showClientSecret, setShowClientSecret] = useState(false);
-  const [showRefreshToken, setShowRefreshToken] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingDriveConnection, setIsLoadingDriveConnection] = useState(true);
+  const [isDisconnectingDrive, setIsDisconnectingDrive] = useState(false);
+  const [googleDriveConnection, setGoogleDriveConnection] = useState({
+    connected: false,
+    email: '',
+    name: ''
+  });
   const [notification, setNotification] = useState(null);
 
   // Show notification helper
@@ -31,8 +32,10 @@ export default function CloudConfig() {
   useEffect(() => {
     if (user?._id) {
       loadConfiguration();
+      loadDriveConnection();
     } else {
       setIsLoading(false);
+      setIsLoadingDriveConnection(false);
     }
   }, [user]);
 
@@ -48,6 +51,11 @@ export default function CloudConfig() {
       const response = await fetch(`${BASE_URL}/config/get/${user._id}`, {
         credentials: 'include'
       });
+      if(response){
+        console.log("Session Working....");
+      }else{
+        console.log("Session Not Working...");
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -62,12 +70,7 @@ export default function CloudConfig() {
           const latestConfig = data.storageConfigs[data.storageConfigs.length - 1];
           setStorageType(latestConfig.type);
 
-          if (latestConfig.type === 'GoogleDrive' && latestConfig.googleDrive) {
-            setClientId(latestConfig.googleDrive.clientId || '');
-            setClientSecret(latestConfig.googleDrive.clientSecret || '');
-            setRefreshToken(latestConfig.googleDrive.refreshToken || '');
-            setRedirectUrl(latestConfig.googleDrive.redirectUrl || '');
-          } else if (latestConfig.type === 'LocalStorage' && latestConfig.localStorage) {
+          if (latestConfig.type === 'LocalStorage' && latestConfig.localStorage) {
             setStoragePath(latestConfig.localStorage.storagePath || '');
           }
         }
@@ -80,6 +83,38 @@ export default function CloudConfig() {
       showNotification('Failed to load configuration', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadDriveConnection = async () => {
+    if (!user?._id) {
+      setIsLoadingDriveConnection(false);
+      return;
+    }
+
+    try {
+      setIsLoadingDriveConnection(true);
+      const response = await fetch(`${BASE_URL}/auth/${user._id}`, {
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const profile = data.user || data;
+
+        setGoogleDriveConnection({
+          connected: Boolean(profile.googleRefreshToken || profile.googleAccessToken || profile.googleId),
+          email: profile.email || '',
+          name: profile.name || ''
+        });
+      } else {
+        setGoogleDriveConnection({ connected: false, email: '', name: '' });
+      }
+    } catch (error) {
+      console.error('Error loading Google Drive connection:', error);
+      setGoogleDriveConnection({ connected: false, email: '', name: '' });
+    } finally {
+      setIsLoadingDriveConnection(false);
     }
   };
 
@@ -108,8 +143,8 @@ export default function CloudConfig() {
     }
 
     if (storageType === 'GoogleDrive') {
-      if (!clientId || !clientSecret || !refreshToken) {
-        showNotification('All Google Drive fields are required', 'error');
+      if (!googleDriveConnection.connected) {
+        showNotification('Please connect Google Drive before saving.', 'error');
         return false;
       }
     } else if (storageType === 'LocalStorage') {
@@ -135,21 +170,15 @@ export default function CloudConfig() {
     try {
       const storageConfig = {
         type: storageType,
-        ...(storageType === 'GoogleDrive' 
+        ...(storageType === 'GoogleDrive'
           ? {
-              googleDrive: {
-                clientId,
-                clientSecret,
-                refreshToken,
-                redirectUrl
-              }
+              driveConnected: true
             }
           : {
               localStorage: {
                 storagePath
               }
-            }
-        )
+            })
       };
 
       const requestBody = {
@@ -183,14 +212,49 @@ export default function CloudConfig() {
   };
 
   const handleClear = () => {
-    setClientId('');
-    setClientSecret('');
-    setRefreshToken('');
-    setRedirectUrl('');
     setStoragePath('');
     setIpAddress('');
     setIpStatus(null);
     showNotification('Form cleared', 'info');
+  };
+
+  const handleConnectGoogleDrive = () => {
+    window.location.href = `${BASE_URL}/auth/google/connect`;
+  };
+
+  const handleDisconnectGoogleDrive = async () => {
+    if (!user?._id) {
+      showNotification('Please log in to disconnect Google Drive', 'error');
+      return;
+    }
+
+    setIsDisconnectingDrive(true);
+
+    try {
+      const response = await fetch(`${BASE_URL}/auth/google/disconnect`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        setGoogleDriveConnection({ connected: false, email: '', name: '' });
+        showNotification(data.message || 'Google Drive disconnected successfully', 'success');
+        await refreshUser?.();
+        await loadDriveConnection();
+      } else {
+        showNotification(data.message || 'Failed to disconnect Google Drive', 'error');
+      }
+    } catch (error) {
+      console.error('Error disconnecting Google Drive:', error);
+      showNotification('Network error: Failed to disconnect Google Drive', 'error');
+    } finally {
+      setIsDisconnectingDrive(false);
+    }
   };
 
   if (isLoading) {
@@ -286,81 +350,92 @@ export default function CloudConfig() {
           </div>
         </div>
 
-        {/* Google Drive Fields */}
+        {/* Google Drive Connection */}
         {storageType === 'GoogleDrive' && (
-          <div className="space-y-4 sm:space-y-5 mb-6 sm:mb-8 p-4 sm:p-6 bg-gray-50 rounded-xl border border-gray-200">
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Client ID <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white text-sm sm:text-base"
-                placeholder="Enter client ID"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Client Secret <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showClientSecret ? "text" : "password"}
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white text-sm sm:text-base"
-                  placeholder="Enter client secret"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowClientSecret(!showClientSecret)}
-                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-1"
-                >
-                  {showClientSecret ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
-                </button>
+          <div className="mb-6 sm:mb-8 rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-slate-50 to-blue-50 p-4 sm:p-6 shadow-sm">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="rounded-xl  p-2 text-white shadow-lg shadow-blue-200">
+                  <img src="/Google_Drive_icon_(2026).svg" alt="Google_Drive" className="h-9 w-9 object-contain" />
+                </div>
+                
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Google Drive Connection</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                    Google Drive is connected through OAuth. Credentials are no longer entered here and refresh tokens are managed automatically.
+                  </p>
+                </div>
               </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Refresh Token <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showRefreshToken ? "text" : "password"}
-                  value={refreshToken}
-                  onChange={(e) => setRefreshToken(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white text-sm sm:text-base"
-                  placeholder="Enter refresh token"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowRefreshToken(!showRefreshToken)}
-                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-1"
-                >
-                  {showRefreshToken ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
-                </button>
+
+              <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-3 py-2 shadow-sm">
+                <span className={`h-2.5 w-2.5 rounded-full ${isLoadingDriveConnection ? 'bg-yellow-400' : googleDriveConnection.connected ? 'bg-green-500' : 'bg-red-400'}`} />
+                <span className="text-sm font-semibold text-gray-700">
+                  {isLoadingDriveConnection
+                    ? 'Checking connection...'
+                    : googleDriveConnection.connected
+                      ? 'Google Drive Connected'
+                      : 'Google Drive Not Connected'}
+                </span>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Redirect URL
-              </label>
-              <input
-                type="text"
-                value={redirectUrl}
-                onChange={(e) => setRedirectUrl(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white text-sm sm:text-base"
-                placeholder="Enter redirect URL (optional)"
-              />
-            </div>
+            {googleDriveConnection.connected ? (
+              <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                <div className="rounded-2xl border border-green-200 bg-green-50/80 p-4 sm:p-5">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="text-sm font-semibold">Connected user details</span>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-green-100 bg-white/80 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Connected Email</p>
+                      <p className="mt-1 break-all text-sm font-semibold text-gray-900">
+                        {googleDriveConnection.email || 'Not available'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-green-100 bg-white/80 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Account Name</p>
+                      <p className="mt-1 break-all text-sm font-semibold text-gray-900">
+                        {googleDriveConnection.name || 'Not available'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleDisconnectGoogleDrive}
+                  disabled={isDisconnectingDrive}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 shadow-sm transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDisconnectingDrive ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Disconnecting...
+                    </>
+                  ) : (
+                    'Disconnect Drive'
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+                  <p className="text-sm font-semibold text-gray-900">Google Drive Not Connected</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Connect Google Drive to enable OAuth-backed storage without exposing client credentials in this page.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleConnectGoogleDrive}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
+                >
+                  Connect Google Drive
+                </button>
+              </div>
+            )}
           </div>
         )}
 

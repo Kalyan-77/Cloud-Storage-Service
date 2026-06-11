@@ -31,6 +31,10 @@ const configSchema = new mongoose.Schema({
         refreshToken: String,
         redirectUrl: String
       },
+      driveConnected: {
+        type: Boolean,
+        default: false
+      },
       localStorage: {
         storagePath: String
       },

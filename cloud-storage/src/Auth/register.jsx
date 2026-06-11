@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { User, Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { User, Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle, ShieldCheck, HardDrive, Sparkles, Check } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { BASE_URL } from '../../config';
 import Loading from '../Components/Loading';
 
@@ -74,188 +74,231 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-black flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Top electric blue wave */}
-        <div className="absolute top-0 left-0 right-0 h-1">
-          <div className="w-full h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 opacity-80"></div>
-        </div>
-        
-        {/* Floating decorative elements */}
-        <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500 rounded-full opacity-20"></div>
-        <div className="absolute top-1/4 -right-20 w-60 h-60 bg-purple-500 rounded-full opacity-20" style={{animationDuration: '3s'}}></div>
-        <div className="absolute -bottom-20 left-1/4 w-80 h-80 bg-orange-500 rounded-full opacity-20" style={{animationDelay: '1s'}}></div>
-      </div>
+    <div className="min-h-screen bg-slate-50 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(59,130,246,0.16),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.14),_transparent_30%)]" />
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400" />
 
-      <div className="relative z-10 w-full max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
+      <div className="relative z-10 min-h-screen flex items-center px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)] lg:grid-cols-[0.95fr_1.05fr]">
+          <section className="relative order-2 flex items-center overflow-hidden bg-white px-6 py-10 sm:px-10 lg:order-1 lg:px-12">
+            <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(59,130,246,0.04),rgba(14,165,233,0.08))]" />
+            <div className="absolute -right-24 top-8 h-56 w-56 rounded-full bg-blue-100 blur-3xl" />
 
-          <h2 className="text-3xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400">
-            Registration Form
-          </h2>
-        </div>
-
-        {/* Main Form Container */}
-        <div className="bg-black bg-opacity-40 backdrop-blur-md border-2 border-gray-600 rounded-2xl p-8 shadow-2xl max-w-4xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-0 items-stretch">
-            
-            {/* Welcome Section */}
-            <div className="bg-gradient-to-br from-orange-500 via-red-500 to-orange-600 rounded-l-2xl p-8 flex items-center justify-center relative overflow-hidden">
-              <div className="text-center text-white z-10">
-                <h3 className="text-4xl md:text-5xl font-bold mb-6">WELCOME!</h3>
-                <p className="text-orange-100 text-lg leading-relaxed max-w-sm">
-                  We're delighted to have you here. If you need any assistance, feel free to reach out.
+            <div className="relative z-10 mx-auto w-full max-w-md">
+              <div className="mb-8">
+                <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-600">Create account</p>
+                <h2 className="mt-3 text-3xl font-bold text-slate-900">Join the cloud workspace</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  Register once and start using the same dashboard, drive tools, and configuration panels as the rest of the app.
                 </p>
               </div>
 
-              {/* Decorative curved overlay */}
-              <div className="absolute inset-0 overflow-hidden">
-                <div className="absolute -right-20 top-0 bottom-0 w-40 bg-black bg-opacity-20 transform skew-x-12"></div>
-              </div>
+              {msg && (
+                <div className="mb-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+                  <CheckCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                  <p className="text-sm font-medium">{msg}</p>
+                </div>
+              )}
 
-              {/* Decorative elements */}
-              <div className="absolute top-8 left-8 w-16 h-16 bg-white bg-opacity-20 rounded-full"></div>
-              <div className="absolute bottom-8 right-8 w-10 h-10 bg-white bg-opacity-20 rounded-full" style={{animationDelay: '0.5s'}}></div>
-              
-              {/* Decorative wave pattern at bottom */}
-              <div className="absolute bottom-0 left-0 right-0">
-                <svg viewBox="0 0 400 80" className="w-full h-16 text-orange-400 opacity-30">
-                  <path d="M0,40 Q100,10 200,40 T400,40 L400,80 L0,80 Z" fill="currentColor"/>
-                </svg>
-              </div>
-            </div>
+              {errors && (
+                <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+                  <p className="text-sm font-medium">{errors}</p>
+                </div>
+              )}
 
-            {/* Register Form Section */}
-            <div className="bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-r-2xl p-8">
-              {/* Register Header */}
-              <div className="mb-8">
-                <h3 className="text-3xl font-bold text-white mb-6">Register</h3>
-                
-                {/* Messages */}
-                {msg && (
-                  <div className="mb-4 p-3 bg-green-500 bg-opacity-20 border border-green-500 rounded-lg flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
-                    <p className="text-green-400 font-medium">{msg}</p>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="register-name">
+                    Full name
+                  </label>
+                  <div className="relative">
+                    <User className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="register-name"
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="Your name"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-4 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      required
+                    />
                   </div>
-                )}
-
-                {errors && (
-                  <div className="mb-4 p-3 bg-red-500 bg-opacity-20 border border-red-500 rounded-lg">
-                    <p className="text-red-400 font-medium">{errors}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Registration Form */}
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Name field */}
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Name"
-                    className="w-full bg-transparent border-b-2 border-gray-600 py-3 pl-10 pr-4 text-white placeholder-gray-400 focus:outline-none focus:border-orange-500 transition-all duration-300"
-                    required
-                  />
                 </div>
 
-                {/* Email field */}
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="register-email">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="register-email"
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="you@example.com"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-4 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      required
+                    />
                   </div>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="Email"
-                    className="w-full bg-transparent border-b-2 border-gray-600 py-3 pl-10 pr-4 text-white placeholder-gray-400 focus:outline-none focus:border-orange-500 transition-all duration-300"
-                    required
-                  />
                 </div>
 
-                {/* Password field */}
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="register-password">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="register-password"
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Create a password"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-12 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
                   </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="Password"
-                    className="w-full bg-transparent border-b-2 border-gray-600 py-3 pl-10 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-orange-500 transition-all duration-300"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors duration-300"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
                 </div>
 
-                {/* Confirm Password field */}
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="register-confirm-password">
+                    Confirm password
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="register-confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      placeholder="Repeat your password"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-12 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
                   </div>
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="Confirm Password"
-                    className="w-full bg-transparent border-b-2 border-gray-600 py-3 pl-10 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-orange-500 transition-all duration-300"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors duration-300"
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
                 </div>
 
-                {/* Submit button */}
+                {/* <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-800">What you get</p>
+                  <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-blue-600" />
+                      Dashboard access
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-blue-600" />
+                      File management tools
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-blue-600" />
+                      Cloud configuration
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-blue-600" />
+                      Profile settings
+                    </div>
+                  </div>
+                </div> */}
+
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold py-3 px-6 rounded-full transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-8"
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:translate-y-[-1px] hover:from-blue-700 hover:to-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {loading ? (
-                    <Loading size="xs" />
+                    <span className="flex items-center gap-3">
+                      <Loading size="xs" />
+                      Creating account...
+                    </span>
                   ) : (
                     <>
                       Register
-                      <ArrowRight className="w-5 h-5" />
+                      <ArrowRight className="h-5 w-5" />
                     </>
                   )}
                 </button>
 
-                {/* Footer link */}
-                <div className="text-center mt-6">
-                  <span className="text-gray-400">Already have an account? </span>
-                  <a href="/login" className="text-orange-400 hover:text-orange-300 font-medium transition-colors duration-300">
-                    Login
-                  </a>
+                <div className="my-5 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-slate-200" />
+                  <span className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">or continue with</span>
+                  <div className="h-px flex-1 bg-slate-200" />
                 </div>
+
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  aria-label="Continue with Google"
+                  onClick={()=>{
+                    window.location.href=
+                    `${BASE_URL}/auth/google`;
+                  }}
+                >
+                  <img src="/Google.png" alt="Google" className="h-5 w-5 object-contain" />
+                  Continue with Google
+                </button>
+
+                <p className="pt-2 text-center text-sm text-slate-600">
+                  Already have an account?{' '}
+                  <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700">
+                    Sign in
+                  </Link>
+                </p>
               </form>
             </div>
-          </div>
-        </div>
+          </section>
 
+          <section className="relative order-1 flex items-center overflow-hidden bg-gradient-to-br from-blue-700 via-blue-600 to-cyan-500 px-8 py-12 text-white sm:px-12 lg:order-2 lg:px-14">
+            <div className="absolute inset-0 opacity-25">
+              <div className="absolute -left-20 top-12 h-44 w-44 rounded-full bg-white blur-3xl" />
+              <div className="absolute bottom-0 right-0 h-56 w-56 rounded-full bg-sky-300 blur-3xl" />
+            </div>
+
+            <div className="relative z-10 max-w-md">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur">
+                <Sparkles className="h-4 w-4" />
+                Start with one account
+              </div>
+              <h1 className="text-4xl font-bold leading-tight sm:text-5xl">Create your MyCloud profile in a minute.</h1>
+              <p className="mt-5 text-base leading-7 text-blue-50 sm:text-lg">
+                Register to sync your storage settings, manage files, and keep the app experience consistent across all pages.
+              </p>
+
+              <div className="mt-10 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                  <ShieldCheck className="h-6 w-6" />
+                  <p className="mt-3 text-sm font-semibold">Secure onboarding</p>
+                  <p className="mt-1 text-sm text-blue-50/90">Registration uses the same backend flow as the login screen.</p>
+                </div>
+                <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                  <HardDrive className="h-6 w-6" />
+                  <p className="mt-3 text-sm font-semibold">Ready for storage</p>
+                  <p className="mt-1 text-sm text-blue-50/90">Jump straight into the dashboard once your account is created.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );

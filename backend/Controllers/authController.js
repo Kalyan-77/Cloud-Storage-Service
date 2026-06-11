@@ -115,6 +115,14 @@ exports.getUserById = async(req, res) =>{
         if(!user){
             return res.status(400).json({message: 'Invalid User Id'});
         }
+
+        if (!user.googleRefreshToken) {
+            return res.status(400).json({
+                connected: false,
+                message: 'Google Drive not connected'
+            });
+        }
+
         res.status(200).json({ 
             success: true,
             message: "User fetched successfully", 
@@ -336,6 +344,45 @@ exports.getBackendData = async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Server Error', error: err.message });
+    }
+};
+
+exports.disconnectGoogleDrive = async (req, res) => {
+    try {
+        if (!req.session?.user?._id) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized. Please log in first.'
+            });
+        }
+
+        const userId = req.session.user._id;
+        const user = await Users.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        user.googleId = null;
+        user.googleAccessToken = null;
+        user.googleRefreshToken = null;
+        await user.save();
+
+        await safeRedisDel(`auth:session:${userId}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Google Drive disconnected successfully'
+        });
+    } catch (err) {
+        console.error('disconnectGoogleDrive error:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to disconnect Google Drive'
+        });
     }
 };
 
