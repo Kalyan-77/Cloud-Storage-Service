@@ -275,9 +275,9 @@ exports.moveFileToTrash = async (req, res) => {
       try {
         await GoogleDriveController.moveFileToTrash(
           { params: { fileId: file.googleDriveId } },
-          { 
-            status: () => ({ json: () => {} }), // dummy response
-            json: () => {}
+          {
+            status: () => ({ json: () => { } }), // dummy response
+            json: () => { }
           }
         );
       } catch (err) {
@@ -304,7 +304,7 @@ exports.moveFileToTrash = async (req, res) => {
 // Permanently delete a file from Drive and MongoDB
 exports.deleteFile = async (req, res) => {
   try {
-    const { id } = req.params; 
+    const { id } = req.params;
     const file = await FileManager.findById(id);
 
     if (!file || file.type !== "file") {
@@ -318,9 +318,9 @@ exports.deleteFile = async (req, res) => {
     // Permanently delete from Google Drive
     if (file.googleDriveId) {
       try {
-        await GoogleDriveController.deleteFile({ params: { fileId: file.googleDriveId } }, { 
-          status: () => ({ json: () => {} }),
-          json: () => {}
+        await GoogleDriveController.deleteFile({ params: { fileId: file.googleDriveId } }, {
+          status: () => ({ json: () => { } }),
+          json: () => { }
         });
       } catch (err) {
         console.error("Error permanently deleting file from Drive:", err.message);
@@ -377,7 +377,7 @@ async function deleteFolderContents(folderId) {
         try {
           await GoogleDriveController.deleteFile(
             { params: { fileId: item.googleDriveId } },
-            { status: () => ({ json: () => {} }), json: () => {} }
+            { status: () => ({ json: () => { } }), json: () => { } }
           );
         } catch (err) {
           console.error("Error deleting file from Drive:", err.message);
@@ -413,8 +413,8 @@ exports.renameItem = async (req, res) => {
         await GoogleDriveController.updateFileName(
           { params: { fileId: item.googleDriveId }, body: { name: newName } },
           {
-            status: () => ({ json: () => {} }), // mock response
-            json: () => {}
+            status: () => ({ json: () => { } }), // mock response
+            json: () => { }
           }
         );
       } catch (err) {
@@ -453,8 +453,8 @@ async function moveFolderContentsToTrash(folderId) {
           await GoogleDriveController.moveFileToTrash(
             { params: { fileId: item.googleDriveId } },
             {
-              status: () => ({ json: () => {} }),
-              json: () => {}
+              status: () => ({ json: () => { } }),
+              json: () => { }
             }
           );
         } catch (err) {

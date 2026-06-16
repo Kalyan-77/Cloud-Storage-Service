@@ -23,36 +23,36 @@ const Users = require("../Models/Users");
 //     return google.drive({ version: 'v3', auth: oauth2Client });
 // }
 
-async function getDrive(userId){
+async function getDrive(userId) {
 
-    const user = await Users.findById(userId);
+  const user = await Users.findById(userId);
 
-    if(!user){
-        throw new Error("User not found");
-    }
+  if (!user) {
+    throw new Error("User not found");
+  }
 
-    if(!user.googleRefreshToken){
+  if (!user.googleRefreshToken) {
     const driveError = new Error("DRIVE_NOT_CONNECTED");
     driveError.code = "DRIVE_NOT_CONNECTED";
     throw driveError;
-    }
+  }
 
-    const oauth2Client =
-      new google.auth.OAuth2(
-        process.env.CLIENT_ID,
-        process.env.CLIENT_SECRET,
-        process.env.GOOGLE_CALLBACK_URL
-      );
+  const oauth2Client =
+    new google.auth.OAuth2(
+      process.env.CLIENT_ID,
+      process.env.CLIENT_SECRET,
+      process.env.GOOGLE_CALLBACK_URL
+    );
 
-    oauth2Client.setCredentials({
-      refresh_token:
+  oauth2Client.setCredentials({
+    refresh_token:
       user.googleRefreshToken
-    });
+  });
 
-    return google.drive({
-      version:"v3",
-      auth:oauth2Client
-    });
+  return google.drive({
+    version: "v3",
+    auth: oauth2Client
+  });
 }
 
 //Display All the include trash
@@ -101,7 +101,7 @@ exports.listAllFiles = async (req, res) => {
       // Ensure we have valid dates
       const createdTime = file.createdTime || new Date().toISOString();
       const modifiedTime = file.modifiedTime || file.createdTime || new Date().toISOString();
-      
+
       return {
         id: file.id,
         name: file.name,
@@ -109,7 +109,7 @@ exports.listAllFiles = async (req, res) => {
         size: file.size ? formatBytes(parseInt(file.size)) : "0 B",
         viewLink: file.webViewLink,
         downloadLink: file.webContentLink,
-        uploadedAt: new Date(createdTime).toLocaleString("en-IN", { 
+        uploadedAt: new Date(createdTime).toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata"
         }),
         createdTime: createdTime,
@@ -186,75 +186,75 @@ exports.uploadFile = async (req, res) => {
 
 // Make file public
 exports.makeFilePublic = async (req, res) => {
-    try {
-        const drive = await getDrive(req.session.user._id);
+  try {
+    const drive = await getDrive(req.session.user._id);
 
-        await drive.permissions.create({
-            fileId: req.params.fileId,
-            requestBody: { role: 'reader', type: 'anyone' },
-        });
-        const result = await drive.files.get({
-            fileId: req.params.fileId,
-            fields: 'id, name, webViewLink, webContentLink',
-        });
-        res.json(result.data);
-    } catch (err) {
-          if (err.message === "DRIVE_NOT_CONNECTED") {
-              return res.status(400).json({
-                connected: false,
-                message: "Google Drive not connected"
-              });
-          }
-        res.status(500).json({ error: err.message });
+    await drive.permissions.create({
+      fileId: req.params.fileId,
+      requestBody: { role: 'reader', type: 'anyone' },
+    });
+    const result = await drive.files.get({
+      fileId: req.params.fileId,
+      fields: 'id, name, webViewLink, webContentLink',
+    });
+    res.json(result.data);
+  } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
     }
+    res.status(500).json({ error: err.message });
+  }
 };
 
 // Delete file
 exports.deleteFile = async (req, res) => {
-    try {
-        const drive = await getDrive(req.session.user._id);
-        await drive.files.delete({ fileId: req.params.fileId });
-        res.json({ success: true });
-    } catch (err) {
-          if (err.message === "DRIVE_NOT_CONNECTED") {
-              return res.status(400).json({
-                connected: false,
-                message: "Google Drive not connected"
-              });
-          }
-        res.status(500).json({ error: err.message });
+  try {
+    const drive = await getDrive(req.session.user._id);
+    await drive.files.delete({ fileId: req.params.fileId });
+    res.json({ success: true });
+  } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
     }
+    res.status(500).json({ error: err.message });
+  }
 };
 
 // Download file
 exports.downloadFile = async (req, res) => {
-    try {
-        const drive = await getDrive(req.session.user._id);
-        const file = await drive.files.get({ fileId: req.params.fileId, fields: 'name' });
-        const fileName = file.data.name;
+  try {
+    const drive = await getDrive(req.session.user._id);
+    const file = await drive.files.get({ fileId: req.params.fileId, fields: 'name' });
+    const fileName = file.data.name;
 
-        const driveRes = await drive.files.get(
-            { fileId: req.params.fileId, alt: 'media' },
-            { responseType: 'stream' }
-        );
+    const driveRes = await drive.files.get(
+      { fileId: req.params.fileId, alt: 'media' },
+      { responseType: 'stream' }
+    );
 
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        driveRes.data.pipe(res);
-    } catch (err) {
-      if (err.message === "DRIVE_NOT_CONNECTED") {
-        return res.status(400).json({
-          connected: false,
-          message: "Google Drive not connected"
-        });
-      }
-      if (err.message === "DRIVE_NOT_CONNECTED") {
-        return res.status(400).json({
-          connected: false,
-          message: "Google Drive not connected"
-        });
-      }
-        res.status(500).json({ error: err.message });
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    driveRes.data.pipe(res);
+  } catch (err) {
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
     }
+    if (err.message === "DRIVE_NOT_CONNECTED") {
+      return res.status(400).json({
+        connected: false,
+        message: "Google Drive not connected"
+      });
+    }
+    res.status(500).json({ error: err.message });
+  }
 };
 
 
@@ -320,7 +320,7 @@ exports.listFilesByType = async (req, res) => {
     const files = response.data.files.map(file => {
       const createdTime = file.createdTime || new Date().toISOString();
       const modifiedTime = file.modifiedTime || file.createdTime || new Date().toISOString();
-      
+
       return {
         id: file.id,
         name: file.name,
@@ -328,8 +328,8 @@ exports.listFilesByType = async (req, res) => {
         size: file.size ? formatBytes(parseInt(file.size)) : "0 B",
         viewLink: file.webViewLink,
         downloadLink: file.webContentLink,
-        uploadedAt: new Date(createdTime).toLocaleString("en-IN", { 
-          timeZone: "Asia/Kolkata" 
+        uploadedAt: new Date(createdTime).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata"
         }),
         createdTime: createdTime,
         modifiedTime: modifiedTime
@@ -576,8 +576,8 @@ exports.getStorageByType = async (req, res) => {
       if (file.mimeType.includes("application/vnd.google-apps")) return;
 
       // check if user asked for ppt
-      if (type === "ppt" && 
-          (file.mimeType.includes("presentation") || file.mimeType.includes("powerpoint"))) {
+      if (type === "ppt" &&
+        (file.mimeType.includes("presentation") || file.mimeType.includes("powerpoint"))) {
         totalSize += size;
       }
       // check if user asked for pdf
@@ -640,7 +640,7 @@ exports.searchFilesByName = async (req, res) => {
     const files = response.data.files.map(file => {
       const createdTime = file.createdTime || new Date().toISOString();
       const modifiedTime = file.modifiedTime || file.createdTime || new Date().toISOString();
-      
+
       return {
         id: file.id,
         name: file.name,
@@ -648,8 +648,8 @@ exports.searchFilesByName = async (req, res) => {
         size: file.size ? formatBytes(parseInt(file.size)) : "0 B",
         viewLink: file.webViewLink,
         downloadLink: file.webContentLink,
-        uploadedAt: new Date(createdTime).toLocaleString("en-IN", { 
-          timeZone: "Asia/Kolkata" 
+        uploadedAt: new Date(createdTime).toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata"
         }),
         createdTime: createdTime,
         modifiedTime: modifiedTime
@@ -744,7 +744,7 @@ exports.listTrashedFiles = async (req, res) => {
     const files = response.data.files.map(file => {
       const createdTime = file.createdTime || new Date().toISOString();
       const modifiedTime = file.modifiedTime || file.createdTime || new Date().toISOString();
-      
+
       return {
         id: file.id,
         name: file.name,
@@ -752,7 +752,7 @@ exports.listTrashedFiles = async (req, res) => {
         size: file.size ? formatBytes(parseInt(file.size)) : "0 B",
         viewLink: file.webViewLink,
         downloadLink: file.webContentLink,
-        uploadedAt: new Date(createdTime).toLocaleString("en-IN", { 
+        uploadedAt: new Date(createdTime).toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata"
         }),
         createdTime: createdTime,
@@ -836,7 +836,7 @@ exports.restoreFileFromTrash = async (req, res) => {
 
 
 // Upload file directly from buffer (for text file creation)
-exports.uploadFileFromBuffer = async (userId,fileObj) => {
+exports.uploadFileFromBuffer = async (userId, fileObj) => {
   try {
     const drive = await getDrive(userId);
 

@@ -7,57 +7,141 @@ passport.use(
     {
       clientID: process.env.CLIENT_ID,
       clientSecret: process.env.CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL
+      callbackURL: process.env.GOOGLE_CALLBACK_URL,
+
+      passReqToCallback: true
     },
 
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
       try {
 
-        let user = await Users.findOne({
-          email: profile.emails[0].value
-        });
+        const action = req.session.oauthAction;
 
-        if (!user) {
+        const email = profile.emails?.[0]?.value;
+
+        let user = await Users.findOne({ email });
+
+        if (action === "login") {
+          if (!user) {
+            return done(
+              null,
+              false,
+              {
+                message: "ACCOUNT_NOT_FOUND"
+              }
+            );
+          }
+          user.googleAccessToken = accessToken;
+          if (refreshToken) {
+            user.googleRefreshToken = refreshToken;
+          }
+          await user.save();
+          return done(null, user);
+        }
+
+        if (action === "register") {
+          if (user) {
+            return done(
+              null,
+              false,
+              {
+                message: "ACCOUNT_ALREADY_EXISTS"
+              }
+            );
+          }
 
           user = await Users.create({
             name: profile.displayName,
-            email: profile.emails[0].value,
+            email: email,
+
             password: "GOOGLE_LOGIN",
+
             googleId: profile.id,
+
             googleAccessToken: accessToken,
+
             googleRefreshToken: refreshToken,
+
             authProvider: "google",
+
             avatar: profile.photos?.[0]?.value || ""
           });
 
-        } else {
-
-          user.googleId = profile.id;
-          user.googleAccessToken = accessToken;
-
-          if(refreshToken){
-            user.googleRefreshToken = refreshToken;
-          }
-
-          await user.save();
+          return done(null, user);
         }
 
-        return done(null,user);
+        if (action === "connect") {
 
-      } catch(err){
-        done(err,null);
+          if (!req.session.userId) {
+            return done(
+              null,
+              false,
+              {
+                message: "LOGIN_REQUIRED"
+              }
+            );
+          }
+
+          const currentUser =
+            await Users.findById(
+              req.session.userId
+            );
+
+          if (!currentUser) {
+            return done(
+              null,
+              false,
+              {
+                message: "USER_NOT_FOUND"
+              }
+            );
+          }
+
+          currentUser.googleId = profile.id;
+
+          currentUser.googleAccessToken =
+            accessToken;
+
+          if (refreshToken) {
+            currentUser.googleRefreshToken =
+              refreshToken;
+          }
+
+          await currentUser.save();
+
+          return done(
+            null,
+            currentUser
+          );
+        }
+
+
+        return done(
+          null,
+          false,
+          {
+            message: "INVALID_OAUTH_ACTION"
+          }
+        );
+      } catch (err) {
+        done(err, null);
       }
     }
   )
 );
 
-passport.serializeUser((user,done)=>{
-  done(null,user._id);
+passport.serializeUser((user, done) => {
+  done(null, user._id);
 });
 
-passport.deserializeUser(async(id,done)=>{
-  const user = await Users.findById(id);
-  done(null,user);
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await Users.findById(id);
+    done(null, user);
+  } catch (err) {
+    done(err, null);
+  }
+
 });
 
 module.exports = passport;
