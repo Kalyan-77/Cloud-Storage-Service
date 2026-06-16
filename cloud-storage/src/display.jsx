@@ -1,7 +1,8 @@
 import { useState } from "react";
 import axios from "axios";
+import { BASE_URL } from "../config";
 
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL = BASE_URL;
 
 export default function Profile({ me, onClose, onUpdate }) {
   const [name, setName] = useState(me.name);

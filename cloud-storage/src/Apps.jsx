@@ -3,7 +3,8 @@ import axios from "axios";
 import { io } from "socket.io-client";
 
 /* ================= CONFIG ================= */
-const BACKEND_URL = "http://localhost:5000";
+import { BASE_URL } from "../config";
+const BACKEND_URL = BASE_URL;
 import Loading from './Components/Loading';
 
 /* Socket OUTSIDE component */

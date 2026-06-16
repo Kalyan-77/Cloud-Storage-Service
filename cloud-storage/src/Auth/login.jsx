@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, CheckCircle, ShieldCheck, HardDrive, Sparkles } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation  } from 'react-router-dom';
 import { useAuth } from '../Context/AuthContext';
 import { BASE_URL } from '../../config';
 import Loading from '../Components/Loading';
@@ -14,7 +14,12 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const location = useLocation();
+
   const { setUser, refreshUser } = useAuth();
+
+  const params = new URLSearchParams(location.search);
+  const oauthError = params.get("error"); //reading the error msg from the URL for login
 
 
   const handleSubmit = async (e) => {
@@ -106,6 +111,22 @@ const Login = () => {
                 </p>
               </div>
 
+              {oauthError === "account_exists" && (
+                <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-700">
+                  <p className="text-sm font-medium">
+                    Account already exists. Please login using Google.
+                  </p>
+                </div>
+              )}
+
+              {oauthError === "oauth_error" && (
+                <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+                  <p className="text-sm font-medium">
+                    Google authentication failed. Please try again.
+                  </p>
+                </div>
+              )}
+              
               {msg && (
                 <div className="mb-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
                   <CheckCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -206,7 +227,7 @@ const Login = () => {
                   aria-label="Continue with Google"
                   onClick={()=>{
                   window.location.href=
-                  `${BASE_URL}/auth/google`;
+                  `${BASE_URL}/auth/google/login`;
                 }}
                 >
                   <img src="/Google.png" alt="Google" className="h-5 w-5 object-contain" />
