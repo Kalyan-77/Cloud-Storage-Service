@@ -5,6 +5,8 @@ import { useAuth } from '../Context/AuthContext';
 import { BASE_URL } from '../../config';
 import Loading from '../Components/Loading';
 
+import { authService } from '../Services/authService';
+
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,36 +30,25 @@ const Login = () => {
     setLoading(true);
 
     try {      
-      const res = await fetch(`${BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await res.json();
+      const data = await authService.login(email, password);
       
-      if (res.ok) {
-        setMsg(data.message || 'Login Successful...');
-        setEmail('');
-        setPassword('');
+      setMsg(data.message || 'Login Successful...');
+      setEmail('');
+      setPassword('');
 
-        // Refresh global auth context so navbar updates immediately
-        try {
-          if (refreshUser) await refreshUser();
-        } catch (err) {
-          // fallback: set user directly if refresh fails and user returned
-          if (data && data.user) setUser(data.user);
-        }
-
-        // Navigate to dashboard
-        navigate('/dashboardHome');
-      } else {
-        setErrors(data.message || 'Invalid credentials');
+      // Refresh global auth context so navbar updates immediately
+      try {
+        if (refreshUser) await refreshUser();
+      } catch (err) {
+        // fallback: set user directly if refresh fails and user returned
+        if (data && data.user) setUser(data.user);
       }
+
+      // Navigate to dashboard home
+      navigate('/dashboard/home');
     } catch (err) {
       console.error(err);
-      setErrors('Server error. Please try again later.');
+      setErrors(err.response?.data?.error || err.response?.data?.message || 'Invalid credentials or server error.');
     } finally {
       setLoading(false);
     }

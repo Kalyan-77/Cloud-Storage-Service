@@ -14,7 +14,7 @@ import {
   FaBars,
   FaTimes
 } from "react-icons/fa";
-import { BASE_URL } from '../../../config';
+import { fileService } from '../../Services/fileService';
 
 const Sidebar = () => {
   const location = useLocation();
@@ -33,10 +33,7 @@ const Sidebar = () => {
 
   const fetchFiles = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/cloud/files`, {
-        credentials: 'include'
-      });
-      const data = await res.json();
+      const data = await fileService.getFiles();
       setFiles(Array.isArray(data) ? data : []);
     } catch (err) {
       console.log('Fetch error:', err);
@@ -47,23 +44,14 @@ const Sidebar = () => {
   const fetchStorageData = async () => {
     try {
       setStorageData(prev => ({ ...prev, loading: true }));
-      
-      const response = await fetch(`${BASE_URL}/cloud/totalStorage`, {
-        credentials: 'include'
+      const data = await fileService.getTotalStorage();
+      setStorageData({
+        usage: data.usage || "0 GB",
+        limit: data.limit || "15 GB",
+        usageInDrive: data.usageInDrive || "0 MB",
+        usageInDriveTrash: data.usageInDriveTrash || "0 KB",
+        loading: false
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStorageData({
-          usage: data.usage || "0 GB",
-          limit: data.limit || "15 GB",
-          usageInDrive: data.usageInDrive || "0 MB",
-          usageInDriveTrash: data.usageInDriveTrash || "0 KB",
-          loading: false
-        });
-      } else {
-        throw new Error('Failed to fetch storage data');
-      }
     } catch (err) {
       console.error('Error fetching storage data:', err);
       setStorageData(prev => ({ ...prev, loading: false }));
@@ -105,11 +93,7 @@ const Sidebar = () => {
 
     setLoading(true);
     try {
-      await fetch(`${BASE_URL}/cloud/upload`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
+      await fileService.uploadFile(formData);
       fetchFiles();
       fetchStorageData();
     } catch (err) {

@@ -3,6 +3,7 @@ import { HardDrive, File, Trash2, RefreshCw, TrendingUp, Database, Folder, Alert
 import { useAuth } from '../../Context/AuthContext';
 import { BASE_URL } from '../../../config';
 import Loading from '../../Components/Loading';
+import { fileService } from '../../Services/fileService';
 
 const StorageTracking = () => {
   const { user } = useAuth();
@@ -43,10 +44,7 @@ const StorageTracking = () => {
   const fetchStorageDetails = async () => {
     setLoading(true);
     try {
-      const storageRes = await fetch(`${BASE_URL}/cloud/totalStorage`,{
-        credentials: 'include'
-      });
-      const storageJson = await storageRes.json().catch(() => ({}));
+      const storageJson = await fileService.getTotalStorage();
 
       if (storageJson.connected === false) {
         setDriveConnectionState({
@@ -55,16 +53,9 @@ const StorageTracking = () => {
         });
         return;
       }
-
-      if (!storageRes.ok) {
-        throw new Error(storageJson.error || storageJson.message || 'Failed to load storage details');
-      }
       setStorageData(storageJson);
 
-      const countRes = await fetch(`${BASE_URL}/cloud/filesCount`,{
-        credentials: 'include'
-      });
-      const countJson = await countRes.json().catch(() => ({}));
+      const countJson = await fileService.getFilesCount();
 
       if (countJson.connected === false) {
         setDriveConnectionState({
@@ -73,25 +64,14 @@ const StorageTracking = () => {
         });
         return;
       }
-
-      if (!countRes.ok) {
-        throw new Error(countJson.error || countJson.message || 'Failed to load file count');
-      }
       setTotalFiles(countJson.totalFiles || 0);
 
       const statsPromises = fileTypes.map(async (ft) => {
         try {
-          const [countRes, storageRes] = await Promise.all([
-            fetch(`${BASE_URL}/cloud/filesCount/type?type=${ft.type}`,{
-              credentials: 'include'
-            }),
-            fetch(`${BASE_URL}/cloud/StorageByType/type?type=${ft.type}`,{
-              credentials: 'include'
-            })
+          const [countData, storageData] = await Promise.all([
+            fileService.getFilesCountByType(ft.type),
+            fileService.getStorageByType(ft.type)
           ]);
-          
-          const countData = await countRes.json().catch(() => ({}));
-          const storageData = await storageRes.json().catch(() => ({}));
 
           if (countData.connected === false || storageData.connected === false) {
             setDriveConnectionState({
@@ -110,6 +90,13 @@ const StorageTracking = () => {
             storage: storageData.storage || '0 B'
           };
         } catch (err) {
+          if (err.response?.data?.connected === false) {
+            setDriveConnectionState({
+              connected: false,
+              message: err.response.data.message || 'Google Drive not connected'
+            });
+            return null;
+          }
           return {
             type: ft.type,
             label: ft.label,
@@ -130,6 +117,12 @@ const StorageTracking = () => {
       setFileStats(stats);
     } catch (error) {
       console.error('Error fetching storage details:', error);
+      if (error.response?.data?.connected === false) {
+        setDriveConnectionState({
+          connected: false,
+          message: error.response.data.message || 'Google Drive not connected'
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -316,32 +309,15 @@ const StorageTracking = () => {
             <div className="flex flex-col items-center justify-center">
               <div className="relative w-64 h-64">
                 <svg viewBox="0 0 200 200" className="transform -rotate-90">
-                  {filePercentages.map((stat, index) => {
-                    const startAngle = filePercentages
-                      .slice(0, index)
-                      .reduce((acc, s) => acc + (parseFloat(s.percentage) * 3.6), 0);
-                    const endAngle = startAngle + (parseFloat(stat.percentage) * 3.6);
-                    const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
-                    
-                    const startX = 100 + 70 * Math.cos((startAngle * Math.PI) / 180);
-                    const startY = 100 + 70 * Math.sin((startAngle * Math.PI) / 180);
-                    const endX = 100 + 70 * Math.cos((endAngle * Math.PI) / 180);
-                    const endY = 100 + 70 * Math.sin((endAngle * Math.PI) / 180);
-                    
-                    return (
-                      <path
-                        key={stat.type}
-                        d={`M 100 100 L ${startX} ${startY} A 70 70 0 ${largeArc} 1 ${endX} ${endY} Z`}
-                        fill={stat.color}
-                        className="transition-all hover:opacity-80 cursor-pointer"
-                      />
-                    );
-                  })}
-                  {emptyPercentage > 0 && (
-                    <path
-                      d={(() => {
-                        const startAngle = totalUsedPercentage * 3.6;
-                        const endAngle = 360;
+                  {totalFiles === 0 ? (
+                    <circle cx="100" cy="100" r="70" fill="#E5E7EB" className="transition-all" />
+                  ) : (
+                    <>
+                      {filePercentages.map((stat, index) => {
+                        const startAngle = filePercentages
+                          .slice(0, index)
+                          .reduce((acc, s) => acc + (parseFloat(s.percentage) * 3.6), 0);
+                        const endAngle = startAngle + (parseFloat(stat.percentage) * 3.6);
                         const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
                         
                         const startX = 100 + 70 * Math.cos((startAngle * Math.PI) / 180);
@@ -349,10 +325,33 @@ const StorageTracking = () => {
                         const endX = 100 + 70 * Math.cos((endAngle * Math.PI) / 180);
                         const endY = 100 + 70 * Math.sin((endAngle * Math.PI) / 180);
                         
-                        return `M 100 100 L ${startX} ${startY} A 70 70 0 ${largeArc} 1 ${endX} ${endY} Z`;
-                      })()}
-                      fill="#E5E7EB"
-                    />
+                        return (
+                          <path
+                            key={stat.type}
+                            d={`M 100 100 L ${startX} ${startY} A 70 70 0 ${largeArc} 1 ${endX} ${endY} Z`}
+                            fill={stat.color}
+                            className="transition-all hover:opacity-80 cursor-pointer"
+                          />
+                        );
+                      })}
+                      {emptyPercentage > 0 && (
+                        <path
+                          d={(() => {
+                            const startAngle = totalUsedPercentage * 3.6;
+                            const endAngle = 360;
+                            const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+                            
+                            const startX = 100 + 70 * Math.cos((startAngle * Math.PI) / 180);
+                            const startY = 100 + 70 * Math.sin((startAngle * Math.PI) / 180);
+                            const endX = 100 + 70 * Math.cos((endAngle * Math.PI) / 180);
+                            const endY = 100 + 70 * Math.sin((endAngle * Math.PI) / 180);
+                            
+                            return `M 100 100 L ${startX} ${startY} A 70 70 0 ${largeArc} 1 ${endX} ${endY} Z`;
+                          })()}
+                          fill="#E5E7EB"
+                        />
+                      )}
+                    </>
                   )}
                   <circle cx="100" cy="100" r="45" fill="white" />
                 </svg>

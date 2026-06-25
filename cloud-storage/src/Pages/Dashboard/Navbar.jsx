@@ -1,26 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, User, Menu, X, ChevronDown, LogOut, UserCircle } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-// These imports should come from your actual files
+import { authService } from '../../Services/authService';
 import { useAuth } from '../../Context/AuthContext';
 import { BASE_URL } from '../../../config';
-
 
 export default function CloudStorageNavbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [isLoadingMacEnvironment, setIsLoadingMacEnvironment] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  
+
   const location = useLocation();
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
@@ -63,11 +58,11 @@ export default function CloudStorageNavbar() {
     setSelectedIndex(-1); // Reset selection when typing
 
     if (query.trim().length > 0) {
-      const filtered = searchDatabase.filter(item => 
+      const filtered = searchDatabase.filter(item =>
         item.name.toLowerCase().includes(query.toLowerCase()) ||
         item.keywords.some(keyword => keyword.toLowerCase().includes(query.toLowerCase()))
       ).slice(0, 6); // Limit to 6 suggestions
-      
+
       setFilteredSuggestions(filtered);
       setShowSearchSuggestions(true);
     } else {
@@ -83,7 +78,7 @@ export default function CloudStorageNavbar() {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => 
+        setSelectedIndex(prev =>
           prev < filteredSuggestions.length - 1 ? prev + 1 : prev
         );
         break;
@@ -113,9 +108,9 @@ export default function CloudStorageNavbar() {
     setSearchQuery('');
     setShowSearchSuggestions(false);
     setSelectedIndex(-1);
-    
+
     if (item.isSpecial) {
-      handleMacEnvironment({ preventDefault: () => {} });
+      handleMacEnvironment({ preventDefault: () => { } });
     } else {
       navigate(item.path);
     }
@@ -146,9 +141,9 @@ export default function CloudStorageNavbar() {
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && 
-          !dropdownRef.current.contains(event.target) &&
-          !event.target.closest('button[data-dropdown-action]')) {
+      if (dropdownRef.current &&
+        !dropdownRef.current.contains(event.target) &&
+        !event.target.closest('button[data-dropdown-action]')) {
         setIsProfileDropdownOpen(false);
       }
     };
@@ -156,7 +151,7 @@ export default function CloudStorageNavbar() {
     if (isProfileDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-    
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -169,35 +164,25 @@ export default function CloudStorageNavbar() {
   const handleLogout = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (isLoggingOut) return;
-    
+
     try {
       setIsLoggingOut(true);
-      
+
       try {
-        await axios.post(
-          `${BASE_URL}/auth/logout`, 
-          {}, 
-          { 
-            withCredentials: true,
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            timeout: 5000
-          }
-        );
+        await authService.logout();
       } catch (apiError) {
         console.error("Logout API failed:", apiError.response?.data || apiError.message);
       }
-      
+
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
       if (setUser && typeof setUser === 'function') {
         setUser(null);
       }
-      
+
       setIsProfileDropdownOpen(false);
       navigate("/", { replace: true });
       setIsLoggingOut(false);
@@ -207,17 +192,17 @@ export default function CloudStorageNavbar() {
   const handleProfile = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (isLoggingOut) return;
-    
+
     try {
-      const profileRoute = location.pathname.startsWith('/dashboard') 
-        ? '/dashboard/profile' 
+      const profileRoute = location.pathname.startsWith('/dashboard')
+        ? '/dashboard/profile'
         : '/profile';
-      
+
       setIsProfileDropdownOpen(false);
       navigate(profileRoute);
-      
+
     } catch (error) {
       console.error('Profile navigation error:', error);
     }
@@ -225,46 +210,30 @@ export default function CloudStorageNavbar() {
 
   const handleMacEnvironment = (e) => {
     e.preventDefault();
-    
-    setIsLoadingMacEnvironment(true);
-    setCountdown(5);
-    
-    const countdownInterval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownInterval);
-          setIsLoadingMacEnvironment(false);
-          
-          try {
-            const screen = window.screen;
-            const windowFeatures = [
-              'fullscreen=yes',
-              'menubar=no',
-              'toolbar=no',
-              'location=no',
-              'status=no',
-              'resizable=yes',
-              'scrollbars=yes',
-              `width=${screen.availWidth}`,
-              `height=${screen.availHeight}`,
-              'left=0',
-              'top=0'
-            ].join(',');
-            const newWindow = window.open('https://mac-os-woad.vercel.app/', '_blank', windowFeatures);
-            
-            if (newWindow) {
-              newWindow.focus();
-            }
-          } catch (error) {
-            console.error('Navigation failed:', error);
-            window.location.href = 'https://mac-os-woad.vercel.app/';
-          }
-          
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    try {
+      const screen = window.screen;
+      const windowFeatures = [
+        'fullscreen=yes',
+        'menubar=no',
+        'toolbar=no',
+        'location=no',
+        'status=no',
+        'resizable=yes',
+        'scrollbars=yes',
+        `width=${screen.availWidth}`,
+        `height=${screen.availHeight}`,
+        'left=0',
+        'top=0'
+      ].join(',');
+      const newWindow = window.open('https://mac-os-woad.vercel.app', '_blank', windowFeatures);
+
+      if (newWindow) {
+        newWindow.focus();
+      }
+    } catch (error) {
+      console.error('Navigation failed:', error);
+      window.location.href = 'https://mac-os-woad.vercel.app';
+    }
   };
 
   const navLinks = [
@@ -276,26 +245,6 @@ export default function CloudStorageNavbar() {
 
   return (
     <>
-      {/* Loading Modal for MacEnvironment */}
-      {isLoadingMacEnvironment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-lg p-8 max-w-sm mx-4 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Loading MacEnvironment
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Preparing immersive fullscreen MacOS experience...
-            </p>
-            <div className="text-3xl font-bold text-blue-600 mb-2">
-              {countdown}
-            </div>
-            <p className="text-sm text-gray-500">
-              {countdown > 1 ? `Opening in kiosk mode in ${countdown} seconds` : 'Entering fullscreen now...'}
-            </p>
-          </div>
-        </div>
-      )}
 
       <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 fixed top-0 left-0 right-0 z-50">
         <div className="flex items-center justify-between">
@@ -308,9 +257,9 @@ export default function CloudStorageNavbar() {
                 </div>
               </div>
             </div>
-            
+
             <div className="hidden sm:block w-px h-8 bg-gray-700"></div>
-            
+
             <h1 className="text-lg sm:text-xl font-bold text-gray-900">
               <span className="hidden sm:inline">
                 <a href='/'>Cloud Storage Service</a>
@@ -341,9 +290,8 @@ export default function CloudStorageNavbar() {
                   <button
                     key={index}
                     onClick={() => handleSuggestionClick(item)}
-                    className={`w-full px-4 py-3 text-left transition-colors border-b border-gray-100 last:border-b-0 flex items-center space-x-3 ${
-                      selectedIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'
-                    }`}
+                    className={`w-full px-4 py-3 text-left transition-colors border-b border-gray-100 last:border-b-0 flex items-center space-x-3 ${selectedIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'
+                      }`}
                   >
                     <Search className={`w-4 h-4 ${selectedIndex === index ? 'text-blue-600' : 'text-gray-400'}`} />
                     <div className="flex-1">
@@ -367,27 +315,21 @@ export default function CloudStorageNavbar() {
                     <button
                       key={`${link.path}-${index}`}
                       onClick={handleMacEnvironment}
-                      disabled={isLoadingMacEnvironment}
-                      className={`font-medium text-sm whitespace-nowrap transition-colors disabled:opacity-50 ${
-                        isLoadingMacEnvironment
-                          ? 'text-blue-400'
-                          : 'text-gray-700 hover:text-gray-900'
-                      }`}
+                      className="font-medium text-sm whitespace-nowrap transition-colors text-gray-700 hover:text-gray-900"
                     >
-                      {isLoadingMacEnvironment ? 'Loading...' : link.label}
+                      {link.label}
                     </button>
                   );
                 }
-                
+
                 return (
                   <Link
                     key={`${link.path}-${index}`}
                     to={link.path}
-                    className={`font-medium text-sm whitespace-nowrap transition-colors ${
-                      isActiveLink(link.path)
-                        ? 'text-blue-600'
-                        : 'text-gray-700 hover:text-gray-900'
-                    }`}
+                    className={`font-medium text-sm whitespace-nowrap transition-colors ${isActiveLink(link.path)
+                      ? 'text-blue-600'
+                      : 'text-gray-700 hover:text-gray-900'
+                      }`}
                   >
                     {link.label}
                   </Link>
@@ -421,7 +363,7 @@ export default function CloudStorageNavbar() {
                       {user ? user.email : 'user@example.com'}
                     </p>
                   </div>
-                  
+
                   <button
                     onClick={handleProfile}
                     disabled={isLoggingOut}
@@ -432,7 +374,7 @@ export default function CloudStorageNavbar() {
                     <UserCircle className="w-4 h-4 mr-3" />
                     Profile
                   </button>
-                  
+
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
@@ -469,7 +411,7 @@ export default function CloudStorageNavbar() {
                       {user ? user.email : 'user@example.com'}
                     </p>
                   </div>
-                  
+
                   <button
                     onClick={handleProfile}
                     disabled={isLoggingOut}
@@ -480,7 +422,7 @@ export default function CloudStorageNavbar() {
                     <UserCircle className="w-4 h-4 mr-3" />
                     Profile
                   </button>
-                  
+
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
@@ -494,7 +436,7 @@ export default function CloudStorageNavbar() {
                 </div>
               )}
             </div>
-            
+
             <button
               onClick={toggleMobileMenu}
               className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
@@ -538,9 +480,8 @@ export default function CloudStorageNavbar() {
                         handleSuggestionClick(item);
                         setIsMobileMenuOpen(false);
                       }}
-                      className={`w-full px-4 py-3 text-left transition-colors border-b border-gray-100 last:border-b-0 flex items-center space-x-3 ${
-                        selectedIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'
-                      }`}
+                      className={`w-full px-4 py-3 text-left transition-colors border-b border-gray-100 last:border-b-0 flex items-center space-x-3 ${selectedIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'
+                        }`}
                     >
                       <Search className={`w-4 h-4 ${selectedIndex === index ? 'text-blue-600' : 'text-gray-400'}`} />
                       <div className="flex-1">
@@ -554,7 +495,7 @@ export default function CloudStorageNavbar() {
                 </div>
               )}
             </div>
-            
+
             {/* Mobile navigation */}
             <nav className="flex flex-col space-y-2">
               {navLinks.map((link, index) => {
@@ -564,30 +505,24 @@ export default function CloudStorageNavbar() {
                       key={`mobile-${link.path}-${index}`}
                       onClick={() => {
                         setIsMobileMenuOpen(false);
-                        handleMacEnvironment({ preventDefault: () => {} });
+                        handleMacEnvironment({ preventDefault: () => { } });
                       }}
-                      disabled={isLoadingMacEnvironment}
-                      className={`block px-3 py-2 rounded-md font-medium text-sm transition-colors text-left disabled:opacity-50 ${
-                        isLoadingMacEnvironment
-                          ? 'text-blue-400 bg-blue-50'
-                          : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
+                      className="block px-3 py-2 rounded-md font-medium text-sm transition-colors text-left text-gray-700 hover:text-gray-900 hover:bg-gray-50"
                     >
-                      {isLoadingMacEnvironment ? 'Loading...' : link.label}
+                      {link.label}
                     </button>
                   );
                 }
-                
+
                 return (
                   <Link
                     key={`mobile-${link.path}-${index}`}
                     to={link.path}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`block px-3 py-2 rounded-md font-medium text-sm transition-colors ${
-                      isActiveLink(link.path)
-                        ? 'text-blue-600 bg-blue-50'
-                        : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
-                    }`}
+                    className={`block px-3 py-2 rounded-md font-medium text-sm transition-colors ${isActiveLink(link.path)
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
                   >
                     {link.label}
                   </Link>

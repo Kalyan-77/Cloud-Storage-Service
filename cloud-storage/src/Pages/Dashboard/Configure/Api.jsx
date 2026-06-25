@@ -4,6 +4,8 @@ import { useAuth } from '../../../Context/AuthContext';
 import { BASE_URL } from '../../../../config';
 import Loading from '../../../Components/Loading';
 
+import { configService } from '../../../Services/configService';
+
 const ApiConfig = () => {
   const { user } = useAuth();
   
@@ -27,22 +29,18 @@ const ApiConfig = () => {
 
     try {
       setIsLoading(true);
-      const response = await fetch(`${BASE_URL}/config/get/${user._id}`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.perplexity_API_exists) {
-          setHasExistingKey(true);
-          setApiKey(''); // Don't populate the field for security
-        }
-      } else if (response.status === 404) {
-        console.log('No configuration found, starting fresh');
+      const data = await configService.getConfig(user._id);
+      if (data.perplexity_API_exists) {
+        setHasExistingKey(true);
+        setApiKey(''); // Don't populate the field for security
       }
     } catch (err) {
-      console.error('Error fetching config:', err);
-      setError('Failed to load configuration');
+      if (err.response?.status === 404) {
+        console.log('No configuration found, starting fresh');
+      } else {
+        console.error('Error fetching config:', err);
+        setError('Failed to load configuration');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -69,30 +67,17 @@ const ApiConfig = () => {
     setError('');
 
     try {
-      const response = await fetch(`${BASE_URL}/config/save/${user._id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          perplexity_API: apiKey
-        })
+      const data = await configService.saveConfig(user._id, {
+        perplexity_API: apiKey
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setIsSaved(true);
-        setHasExistingKey(true);
-        setApiKey(''); // Clear the input after successful save
-        setTimeout(() => setIsSaved(false), 3000);
-      } else {
-        setError(data.message || 'Failed to save API key');
-      }
+      setIsSaved(true);
+      setHasExistingKey(true);
+      setApiKey(''); // Clear the input after successful save
+      setTimeout(() => setIsSaved(false), 3000);
     } catch (err) {
       console.error('Error saving API key:', err);
-      setError('Network error. Please try again.');
+      setError(err.response?.data?.message || 'Failed to save API key. Please try again.');
     } finally {
       setIsSaving(false);
     }

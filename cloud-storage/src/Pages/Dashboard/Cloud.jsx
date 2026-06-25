@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BASE_URL } from '../../../config';
+import { fileService } from '../../Services/fileService';
 
 const HomeCloud = () => {
     const [files, setFiles] = useState([]);
@@ -8,10 +8,7 @@ const HomeCloud = () => {
 
     const fetchFiles = async () => {
         try {
-            const res = await fetch(`${BASE_URL}/cloud/files`, {
-                credentials: 'include'
-            });
-            const data = await res.json();
+            const data = await fileService.getFiles();
             setFiles(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Fetch error:', err);
@@ -28,11 +25,7 @@ const HomeCloud = () => {
 
         setLoading(true);
         try {
-            await fetch(`${BASE_URL}/cloud/upload`, {
-                method: 'POST',
-                body: formData,
-                credentials: 'include'
-            });
+            await fileService.uploadFile(formData);
             setSelectedFile(null);
             fetchFiles();
         } catch (err) {
@@ -46,10 +39,7 @@ const HomeCloud = () => {
         if (!window.confirm('Are you sure you want to delete this file?')) return;
 
         try {
-            await fetch(`${BASE_URL}/cloud/files/${fileId}`, {
-                method: 'DELETE',
-                credentials: 'include'
-            });
+            await fileService.deleteFilePermanently(fileId);
             fetchFiles();
         } catch (err) {
             console.error('Error deleting file:', err);

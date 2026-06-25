@@ -5,7 +5,7 @@ import {
   RefreshCw, CheckCircle2, Circle, X
 } from 'lucide-react';
 
-import { BASE_URL } from '../../../config';
+import { fileService } from '../../Services/fileService';
 import Loading from '../../Components/Loading';
 
 const Bin = () => {
@@ -26,23 +26,17 @@ const Bin = () => {
   };
 
   // Show notification
-  const showNotification = useCallback((message, type = 'success') => {
+  const showNotification = (message, type = 'success') => {
     setNotification({ message, type, show: true });
     setTimeout(() => {
       setNotification(prev => ({ ...prev, show: false }));
     }, 3000);
-  }, []);
+  };
 
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${BASE_URL}/cloud/bin`, {
-        credentials: 'include',
-      });
-      
-      if (!res.ok) throw new Error('Failed to fetch files');
-      
-      const data = await res.json();
+      const data = await fileService.getBinFiles();
       setFiles(Array.isArray(data) ? data : []);
     } catch (err) {
       console.log('Fetch error: ', err);
@@ -55,13 +49,7 @@ const Bin = () => {
 
   const restoreFile = async (fileId) => {
     try {
-      const response = await fetch(`${BASE_URL}/cloud/restore/${fileId}/`, {
-        method: 'PUT',
-        credentials: 'include',
-      });
-      
-      if (!response.ok) throw new Error('Restore failed');
-      
+      await fileService.restoreFile(fileId);
       showNotification('File restored successfully!');
       fetchFiles();
       
@@ -78,13 +66,7 @@ const Bin = () => {
 
   const deleteFilePermanently = async (fileId) => {
     try {
-      const response = await fetch(`${BASE_URL}/cloud/deletefiles/${fileId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      
-      if (!response.ok) throw new Error('Delete failed');
-      
+      await fileService.deleteFilePermanently(fileId);
       showNotification('File deleted permanently');
       fetchFiles();
       

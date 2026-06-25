@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Search, Upload, Download, Link2, Edit3, Trash2, MoreVertical, 
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { BASE_URL } from '../../../config';
 import Loading from '../../Components/Loading';
+import { fileService } from '../../Services/fileService';
 
 const HomeCloud = () => {
   const [files, setFiles] = useState([]);
@@ -32,8 +33,8 @@ const HomeCloud = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [previewFile, setPreviewFile] = useState(null); // { id, name, url, mimeType }
   const [previewLoading, setPreviewLoading] = useState(false);
-
-  const API_BASE = `${BASE_URL}/cloud`;
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
 
   const typeMapping = {
     'Documents': ['pdf', 'doc', 'docx', 'txt', 'rtf'],
@@ -62,11 +63,7 @@ const HomeCloud = () => {
   const fetchFiles = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/files`,{
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error('Failed to fetch files');
-      const data = await response.json();
+      const data = await fileService.getFiles();
       
       const filesWithState = data.map(file => ({
         ...file,
@@ -82,22 +79,24 @@ const HomeCloud = () => {
       
       setFiles(filesWithState);
       setRecentFiles(filesWithState.slice(0, 6));
+      
+      // Calculate total files count locally to avoid extra API request
+      setStats(prev => ({
+        ...prev,
+        totalFiles: filesWithState.length
+      }));
     } catch (error) {
       console.error('Error fetching files:', error);
       showNotification('Failed to load files', 'error');
     } finally {
       setLoading(false);
     }
-  }, [API_BASE, showNotification]);
+  }, [showNotification]);
 
   const fetchFilesByType = useCallback(async (type) => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/files/type?type=${type}`,{
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error('Failed to fetch files by type');
-      const data = await response.json();
+      const data = await fileService.getFilesByType(type);
       
       const filesWithState = data.map(file => ({
         ...file,
@@ -118,38 +117,20 @@ const HomeCloud = () => {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE, showNotification]);
+  }, [showNotification]);
 
   const fetchStats = useCallback(async () => {
     try {
-      const [filesCountRes, storageRes] = await Promise.all([
-        fetch(`${API_BASE}/filesCount`,{
-          credentials: "include"
-        }),
-        fetch(`${API_BASE}/totalStorage`,{
-          credentials: "include"
-        })
-      ]);
+      const storage = await fileService.getTotalStorage();
 
-      if (filesCountRes.ok) {
-        const filesCount = await filesCountRes.json();
-        setStats(prev => ({
-          ...prev,
-          totalFiles: filesCount.totalFiles || filesCount.count || 0,
-        }));
-      }
-
-      if (storageRes.ok) {
-        const storage = await storageRes.json();
-        setStats(prev => ({
-          ...prev,
-          storageUsed: storage.usage || storage.totalSize || '0 Bytes'
-        }));
-      }
+      setStats(prev => ({
+        ...prev,
+        storageUsed: storage.usage || storage.totalSize || '0 Bytes'
+      }));
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
-  }, [API_BASE]);
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!searchTerm.trim()) {
@@ -159,11 +140,7 @@ const HomeCloud = () => {
     
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/search?name=${encodeURIComponent(searchTerm)}`,{
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error('Search failed');
-      const data = await response.json();
+      const data = await fileService.searchFiles(searchTerm);
       
       const filesWithState = data.map(file => ({
         ...file,
@@ -184,10 +161,9 @@ const HomeCloud = () => {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, fetchFiles, API_BASE, showNotification]);
+  }, [searchTerm, fetchFiles, showNotification]);
 
-  const handleFileUpload = useCallback(async (event) => {
-    const file = event.target.files[0];
+  const uploadSingleFile = useCallback(async (file) => {
     if (!file) return;
 
     const formData = new FormData();
@@ -195,13 +171,7 @@ const HomeCloud = () => {
 
     try {
       setUploadingFile(true);
-      const response = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        body: formData,
-        credentials: "include"
-      });
-
-      if (!response.ok) throw new Error('Upload failed');
+      await fileService.uploadFile(formData);
       
       showNotification('File uploaded successfully!');
       fetchFiles();
@@ -211,18 +181,53 @@ const HomeCloud = () => {
       showNotification('Failed to upload file', 'error');
     } finally {
       setUploadingFile(false);
-      event.target.value = '';
     }
-  }, [API_BASE, fetchFiles, fetchStats, showNotification]);
+  }, [fetchFiles, fetchStats, showNotification]);
+
+  const handleFileUpload = useCallback(async (event) => {
+    const file = event.target.files[0];
+    await uploadSingleFile(file);
+    event.target.value = '';
+  }, [uploadSingleFile]);
+
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleFileDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounter.current = 0;
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      await uploadSingleFile(file);
+    }
+  }, [uploadSingleFile]);
 
   const handleMoveToTrash = useCallback(async (fileId) => {
     try {
-      const response = await fetch(`${API_BASE}/trash/${fileId}`, {
-        method: 'PUT',
-        credentials: "include"
-      });
-
-      if (!response.ok) throw new Error('Move to trash failed');
+      await fileService.moveToTrash(fileId);
       
       setFiles(prev => prev.filter(file => file.id !== fileId));
       setRecentFiles(prev => prev.filter(file => file.id !== fileId));
@@ -240,16 +245,11 @@ const HomeCloud = () => {
       showNotification('Failed to move file to trash', 'error');
       setDeleteConfirm(null);
     }
-  }, [API_BASE, showNotification, fetchStats]);
+  }, [showNotification, fetchStats]);
 
   const handleDownloadFile = useCallback(async (fileId, fileName) => {
     try {
-      const response = await fetch(`${API_BASE}/download/${fileId}`,{
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error('Download failed');
-      
-      const blob = await response.blob();
+      const blob = await fileService.downloadFile(fileId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -264,16 +264,11 @@ const HomeCloud = () => {
       console.error('Error downloading file:', error);
       showNotification('Failed to download file', 'error');
     }
-  }, [API_BASE, showNotification]);
+  }, [showNotification]);
 
   const handleGenerateLink = useCallback(async (fileId) => {
     try {
-      const response = await fetch(`${API_BASE}/generate-link/${fileId}`,{
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error('Link generation failed');
-      
-      const data = await response.json();
+      const data = await fileService.generateLink(fileId);
       const linkToCopy = data.viewLink || data.link;
       await navigator.clipboard.writeText(linkToCopy);
       showNotification('Link copied to clipboard!');
@@ -281,7 +276,7 @@ const HomeCloud = () => {
       console.error('Error generating link:', error);
       showNotification('Failed to generate link', 'error');
     }
-  }, [API_BASE, showNotification]);
+  }, [showNotification]);
 
   const handleOpenPreview = useCallback(async (file) => {
     // Show modal immediately with loading placeholder for perceived speed
@@ -300,7 +295,7 @@ const HomeCloud = () => {
 
       // For media types (image/video/audio) we can stream directly by using the download URL
       if (kind === 'image' || kind === 'video' || kind === 'audio') {
-        const url = `${API_BASE}/download/${file.id}`;
+        const url = `${BASE_URL}/cloud/download/${file.id}`;
         setPreviewFile({ id: file.id, name: file.name, url, mimeType: mimeHint, kind });
         setPreviewLoading(false);
         return;
@@ -314,11 +309,7 @@ const HomeCloud = () => {
             try { window.URL.revokeObjectURL(previewFile.url); } catch (e) {}
           }
 
-          const response = await fetch(`${API_BASE}/download/${file.id}`,{
-            credentials: "include"
-          });
-          if (!response.ok) throw new Error('Failed to load pdf for preview');
-          const blob = await response.blob();
+          const blob = await fileService.downloadFile(file.id);
           // ensure blob has correct mime type for embedding
           const pdfBlob = (blob && blob.type && blob.type.includes('pdf')) ? blob : new Blob([blob], { type: 'application/pdf' });
           const url = window.URL.createObjectURL(pdfBlob);
@@ -328,7 +319,7 @@ const HomeCloud = () => {
         } catch (err) {
           console.error('PDF preview failed:', err);
           // fallback to downloadable URL if blob approach fails
-          setPreviewFile({ id: file.id, name: file.name, url: `${API_BASE}/download/${file.id}`, mimeType: mimeHint, kind: 'other' });
+          setPreviewFile({ id: file.id, name: file.name, url: `${BASE_URL}/cloud/download/${file.id}`, mimeType: mimeHint, kind: 'other' });
           setPreviewLoading(false);
           return;
         }
@@ -336,9 +327,7 @@ const HomeCloud = () => {
 
       // For text we need to fetch content
       if (kind === 'text') {
-        const response = await fetch(`${API_BASE}/download/${file.id}`, { cache: 'no-store', credentials: 'include' });
-        if (!response.ok) throw new Error('Failed to load text file');
-        const blob = await response.blob();
+        const blob = await fileService.downloadFile(file.id);
         const textContent = await blob.text();
         setPreviewFile({ id: file.id, name: file.name, url: null, mimeType: blob.type, kind: 'text', textContent });
         setPreviewLoading(false);
@@ -346,14 +335,14 @@ const HomeCloud = () => {
       }
 
       // Fallback: set a streamable download url (will let user download or open in new tab)
-      setPreviewFile({ id: file.id, name: file.name, url: `${API_BASE}/download/${file.id}`, mimeType: mimeHint, kind: 'other' });
+      setPreviewFile({ id: file.id, name: file.name, url: `${BASE_URL}/cloud/download/${file.id}`, mimeType: mimeHint, kind: 'other' });
     } catch (err) {
       console.error('Error opening preview:', err);
       showNotification('Failed to open preview', 'error');
     } finally {
       setPreviewLoading(false);
     }
-  }, [API_BASE, showNotification]);
+  }, [showNotification]);
 
   const handleClosePreview = useCallback(() => {
     if (previewFile?.url) {
@@ -364,12 +353,7 @@ const HomeCloud = () => {
 
   const handleMakePublic = useCallback(async (fileId) => {
     try {
-      const response = await fetch(`${API_BASE}/public/${fileId}`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-
-      if (!response.ok) throw new Error('Failed to make file public');
+      await fileService.makePublic(fileId);
       
       setFiles(prev => prev.map(file => 
         file.id === fileId ? { ...file, isPublic: true } : file
@@ -380,20 +364,11 @@ const HomeCloud = () => {
       console.error('Error making file public:', error);
       showNotification('Failed to make file public', 'error');
     }
-  }, [API_BASE, showNotification]);
+  }, [showNotification]);
 
   const handleRenameFile = useCallback(async (fileId, newName) => {
     try {
-      const response = await fetch(`${API_BASE}/updateFileName/${fileId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: newName }),
-        credentials: 'include'
-      });
-
-      if (!response.ok) throw new Error('Rename failed');
+      await fileService.renameFile(fileId, newName);
       
       setFiles(prev => prev.map(file => 
         file.id === fileId ? { ...file, name: newName } : file
@@ -404,20 +379,12 @@ const HomeCloud = () => {
       console.error('Error renaming file:', error);
       showNotification('Failed to rename file', 'error');
     }
-  }, [API_BASE, showNotification]);
+  }, [showNotification]);
 
   useEffect(() => {
     fetchFiles();
     fetchStats();
   }, [fetchFiles, fetchStats]);
-
-  useEffect(() => {
-    if (activeCategory === 'All') {
-      fetchFiles();
-    } else {
-      fetchFiles();
-    }
-  }, [activeCategory, fetchFiles]);
 
   // Close preview on Escape and cleanup object URLs
   useEffect(() => {
@@ -886,7 +853,22 @@ const HomeCloud = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <div 
+      className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleFileDrop}
+    >
+      {isDragging && (
+        <div className="fixed inset-0 bg-blue-50/70 backdrop-blur-sm z-[100] flex items-center justify-center p-6 m-4 pointer-events-none transition-all duration-300">
+          <div className="flex flex-col items-center justify-center space-y-4 text-blue-600 bg-white border-2 border-dashed border-blue-500 p-8 rounded-2xl shadow-xl max-w-sm w-full text-center">
+            <Upload className="w-16 h-16 animate-bounce" />
+            <h3 className="text-xl font-bold">Drop files here</h3>
+            <p className="text-sm text-gray-500">Files will be uploaded directly to your drive.</p>
+          </div>
+        </div>
+      )}
       <DeleteConfirmModal fileId={deleteConfirm} />
       <PreviewModal file={previewFile} />
       

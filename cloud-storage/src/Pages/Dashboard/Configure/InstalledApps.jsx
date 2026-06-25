@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Download, Trash2, Check, Loader, Loader2, Save, RefreshCw, Lock } from 'lucide-react';
 import { useAuth } from '../../../Context/AuthContext';
 import Loading from '../../../Components/Loading';
-import { BASE_URL } from '../../../../config';
+import { configService } from '../../../Services/configService';
 
 export default function InstallApps() {
   const { user } = useAuth();
@@ -46,13 +46,7 @@ export default function InstallApps() {
   const fetchAppsFromDB = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${BASE_URL}/apps/all`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch apps');
-      }
-      
-      const result = await response.json();
+      const result = await configService.fetchApps();
       
       if (result.success) {
         const transformedApps = result.data.map(app => ({
@@ -93,36 +87,32 @@ export default function InstallApps() {
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/config/get/${user._id}`, {
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Load installed apps from backend
-        if (data.desktopApps && data.desktopApps.length > 0) {
-          setApps(prevApps =>
-            prevApps.map(app => {
-              // System apps are always installed
-              if (app.isSystemApp) {
-                return { ...app, installed: true };
-              }
-              // Other apps depend on backend data
-              return {
-                ...app,
-                installed: data.desktopApps.includes(app.name)
-              };
-            })
-          );
-        }
-        setHasUnsavedChanges(false);
-      } else if (response.status === 404) {
-        console.log('No configuration found, using defaults');
+      const data = await configService.getConfig(user._id);
+      
+      // Load installed apps from backend
+      if (data.desktopApps && data.desktopApps.length > 0) {
+        setApps(prevApps =>
+          prevApps.map(app => {
+            // System apps are always installed
+            if (app.isSystemApp) {
+              return { ...app, installed: true };
+            }
+            // Other apps depend on backend data
+            return {
+              ...app,
+              installed: data.desktopApps.includes(app.name)
+            };
+          })
+        );
       }
+      setHasUnsavedChanges(false);
     } catch (error) {
-      console.error('Error loading configuration:', error);
-      showNotification('Failed to load installed apps', 'error');
+      if (error.response?.status === 404) {
+        console.log('No configuration found, using defaults');
+      } else {
+        console.error('Error loading configuration:', error);
+        showNotification('Failed to load installed apps', 'error');
+      }
     }
   };
 
@@ -147,31 +137,15 @@ export default function InstallApps() {
       console.log('=== Save Configuration Debug ===');
       console.log('User ID:', user._id);
       console.log('Installed Apps to Save:', installedAppsToSave);
-      console.log('Request URL:', `${BASE_URL}/config/save/${user._id}`);
 
-      const response = await fetch(`${BASE_URL}/config/save/${user._id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify(requestBody)
-      });
+      const data = await configService.saveConfig(user._id, requestBody);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        showNotification('Desktop apps configuration saved successfully!', 'success');
-        setHasUnsavedChanges(false);
-        console.log('✅ Configuration saved successfully');
-      } else {
-        const errorMessage = data.message || 'Failed to save configuration';
-        showNotification(errorMessage, 'error');
-        console.error('❌ Save failed:', errorMessage);
-      }
+      showNotification('Desktop apps configuration saved successfully!', 'success');
+      setHasUnsavedChanges(false);
+      console.log('✅ Configuration saved successfully');
     } catch (error) {
       console.error('❌ Error saving configuration:', error);
-      showNotification(`Network error: ${error.message}`, 'error');
+      showNotification(error.response?.data?.message || 'Failed to save configuration', 'error');
     } finally {
       setIsSaving(false);
     }

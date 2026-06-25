@@ -3,7 +3,8 @@ import { Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-r
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../Context/AuthContext';
 import { BASE_URL } from '../../config';
-import axios from 'axios';
+
+import { authService } from '../Services/authService';
 
 const ChangePassword = () => {
   const { user } = useAuth();
@@ -77,43 +78,33 @@ const ChangePassword = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await axios.put(
-        `${BASE_URL}/auth/change-password/${user._id}`,
-        {
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword
-        },
-        {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
+      const data = await authService.changePassword(
+        user._id,
+        formData.currentPassword,
+        formData.newPassword
       );
 
-      if (response.data.success) {
-        setMessage({ 
-          type: 'success', 
-          text: 'Password changed successfully!' 
-        });
-        
-        // Clear form
-        setFormData({
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        });
+      setMessage({ 
+        type: 'success', 
+        text: data.message || 'Password changed successfully!' 
+      });
+      
+      // Clear form
+      setFormData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
 
-        // Redirect to profile after 2 seconds
-        setTimeout(() => {
-          navigate('/dashboard/profile');
-        }, 2000);
-      }
+      // Redirect to profile after 2 seconds
+      setTimeout(() => {
+        navigate('/dashboard/profile');
+      }, 2000);
     } catch (error) {
       console.error('Change password error:', error);
       setMessage({ 
         type: 'error', 
-        text: error.response?.data?.message || 'Failed to change password. Please try again.' 
+        text: error.response?.data?.error || error.response?.data?.message || 'Failed to change password. Please try again.' 
       });
     } finally {
       setLoading(false);

@@ -1,21 +1,21 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import axios from "axios";
-import { BASE_URL } from '../../config';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { authService } from '../Services/authService';
+import { subscribeTo401 } from '../Services/api';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({children}) =>{
-    const [user ,setUser] = useState(null);
+export const AuthProvider = ({ children }) => {
+    const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const refreshUser = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`${BASE_URL}/auth/checkSession`, { withCredentials: true });
-            console.log("🔍 checkSession response:", res.data);
-            if (res.data.loggedIn) {
-                setUser(res.data.user);
-                console.log("✅ User logged in:", res.data.user);
-                return res.data.user;
+            const data = await authService.checkSession();
+            console.log("🔍 checkSession response:", data);
+            if (data.loggedIn) {
+                setUser(data.user);
+                console.log("✅ User logged in:", data.user);
+                return data.user;
             } else {
                 setUser(null);
                 console.log("❌ No active session");
@@ -33,10 +33,17 @@ export const AuthProvider = ({children}) =>{
     useEffect(() => {
         // Run initial session check on mount
         refreshUser();
+
+        // Auto clean user session in frontend state on unauthorized backend responses
+        const unsubscribe = subscribeTo401(() => {
+            setUser(null);
+        });
+
+        return () => unsubscribe();
     }, []);
 
-    return(
-        <AuthContext.Provider value={{user,setUser, loading, refreshUser}}>
+    return (
+        <AuthContext.Provider value={{ user, setUser, loading, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );

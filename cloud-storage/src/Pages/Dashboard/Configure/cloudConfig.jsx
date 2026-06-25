@@ -3,6 +3,8 @@ import { Cloud, HardDrive, CheckCircle, Server, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../Context/AuthContext';
 import { BASE_URL } from '../../../../config';
 import Loading from '../../../Components/Loading';
+import { configService } from '../../../Services/configService';
+import { authService } from '../../../Services/authService';
 
 export default function CloudConfig() {
   const { user, refreshUser } = useAuth();
@@ -48,39 +50,29 @@ export default function CloudConfig() {
 
     try {
       setIsLoading(true);
-      const response = await fetch(`${BASE_URL}/config/get/${user._id}`, {
-        credentials: 'include'
-      });
-      if(response){
-        console.log("Session Working....");
-      }else{
-        console.log("Session Not Working...");
+      const data = await configService.getConfig(user._id);
+      
+      // Set IP Address
+      if (data.ipAddress) {
+        setIpAddress(data.ipAddress);
       }
 
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Set IP Address
-        if (data.ipAddress) {
-          setIpAddress(data.ipAddress);
-        }
+      // Load the most recent storage config
+      if (data.storageConfigs && data.storageConfigs.length > 0) {
+        const latestConfig = data.storageConfigs[data.storageConfigs.length - 1];
+        setStorageType(latestConfig.type);
 
-        // Load the most recent storage config
-        if (data.storageConfigs && data.storageConfigs.length > 0) {
-          const latestConfig = data.storageConfigs[data.storageConfigs.length - 1];
-          setStorageType(latestConfig.type);
-
-          if (latestConfig.type === 'LocalStorage' && latestConfig.localStorage) {
-            setStoragePath(latestConfig.localStorage.storagePath || '');
-          }
+        if (latestConfig.type === 'LocalStorage' && latestConfig.localStorage) {
+          setStoragePath(latestConfig.localStorage.storagePath || '');
         }
-      } else if (response.status === 404) {
-        // No configuration found yet - this is fine for first time users
-        console.log('No configuration found, using defaults');
       }
     } catch (error) {
-      console.error('Error loading configuration:', error);
-      showNotification('Failed to load configuration', 'error');
+      if (error.response?.status === 404) {
+        console.log('No configuration found, using defaults');
+      } else {
+        console.error('Error loading configuration:', error);
+        showNotification('Failed to load configuration', 'error');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -94,22 +86,14 @@ export default function CloudConfig() {
 
     try {
       setIsLoadingDriveConnection(true);
-      const response = await fetch(`${BASE_URL}/auth/${user._id}`, {
-        credentials: 'include'
+      const data = await authService.getUserProfile(user._id);
+      const profile = data.user || data;
+
+      setGoogleDriveConnection({
+        connected: Boolean(profile.googleRefreshToken || profile.googleAccessToken || profile.googleId),
+        email: profile.email || '',
+        name: profile.name || ''
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const profile = data.user || data;
-
-        setGoogleDriveConnection({
-          connected: Boolean(profile.googleRefreshToken || profile.googleAccessToken || profile.googleId),
-          email: profile.email || '',
-          name: profile.name || ''
-        });
-      } else {
-        setGoogleDriveConnection({ connected: false, email: '', name: '' });
-      }
     } catch (error) {
       console.error('Error loading Google Drive connection:', error);
       setGoogleDriveConnection({ connected: false, email: '', name: '' });
@@ -186,26 +170,13 @@ export default function CloudConfig() {
         storageConfig
       };
 
-      const response = await fetch(`${BASE_URL}/config/save/${user._id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify(requestBody)
-      });
+      const data = await configService.saveConfig(user._id, requestBody);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        showNotification('Configuration saved successfully!', 'success');
-        console.log('Saved configuration:', data.config);
-      } else {
-        showNotification(data.message || 'Failed to save configuration', 'error');
-      }
+      showNotification('Configuration saved successfully!', 'success');
+      console.log('Saved configuration:', data.config);
     } catch (error) {
       console.error('Error saving configuration:', error);
-      showNotification('Network error: Failed to save configuration', 'error');
+      showNotification(error.response?.data?.message || 'Failed to save configuration', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -231,27 +202,14 @@ export default function CloudConfig() {
     setIsDisconnectingDrive(true);
 
     try {
-      const response = await fetch(`${BASE_URL}/auth/google/disconnect`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok) {
-        setGoogleDriveConnection({ connected: false, email: '', name: '' });
-        showNotification(data.message || 'Google Drive disconnected successfully', 'success');
-        await refreshUser?.();
-        await loadDriveConnection();
-      } else {
-        showNotification(data.message || 'Failed to disconnect Google Drive', 'error');
-      }
+      const data = await authService.disconnectGoogleDrive();
+      setGoogleDriveConnection({ connected: false, email: '', name: '' });
+      showNotification(data.message || 'Google Drive disconnected successfully', 'success');
+      await refreshUser?.();
+      await loadDriveConnection();
     } catch (error) {
       console.error('Error disconnecting Google Drive:', error);
-      showNotification('Network error: Failed to disconnect Google Drive', 'error');
+      showNotification(error.response?.data?.message || 'Failed to disconnect Google Drive', 'error');
     } finally {
       setIsDisconnectingDrive(false);
     }

@@ -4,6 +4,8 @@ import { Link, useNavigate, useLocation  } from 'react-router-dom';
 import { BASE_URL } from '../../config';
 import Loading from '../Components/Loading';
 
+import { authService } from '../Services/authService';
+
 const Register = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -44,34 +46,24 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const res = await fetch(`${BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password
-        })
+      const data = await authService.register(
+        formData.name,
+        formData.email,
+        formData.password
+      );
+
+      setMsg('Successfully Registered...');
+      setFormData({
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
       });
 
-      const data = await res.json();
-      
-      if (res.ok) {
-        setMsg('Successfully Registered...');
-        setFormData({
-          name: '',
-          email: '',
-          password: '',
-          confirmPassword: ''
-        });
-
-        navigate('/login');
-      } else {
-        setErrors(data.message || 'Email Already Exists!!');
-      }
+      navigate('/login');
     } catch (err) {
       console.error(err);
-      setErrors('Server error. Please try again later.');
+      setErrors(err.response?.data?.error || err.response?.data?.message || 'Email Already Exists or Server Error.');
     } finally {
       setLoading(false);
     }

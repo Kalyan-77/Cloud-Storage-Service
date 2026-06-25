@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Cloud, Menu, X, Search, ChevronDown } from 'lucide-react';
 import { useAuth } from "../../Context/AuthContext"
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { authService } from "../../Services/authService";
 import { BASE_URL } from '../../../config';
 
 const Navbar = () => {
@@ -16,7 +16,7 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post(`${BASE_URL}/auth/logout`, {}, { withCredentials: true });
+      await authService.logout();
       setUser(null); // clear frontend user state
       navigate("/"); // go back to hero page
     } catch (err) {
