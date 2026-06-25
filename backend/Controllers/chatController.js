@@ -1,7 +1,7 @@
 const ChatRoom = require("../Models/ChatRoom");
 const Message = require("../Models/Message");
 const Users = require("../Models/Users");
-const redisClient = require("../Config/redis");
+const redisService = require("../Services/redisService");
 
 // Get all users except self
 exports.getUsers = async (req, res) => {
@@ -30,25 +30,12 @@ exports.getOrCreateRoom = async (req, res) => {
   res.json(room);
 };
 
-// Get messages - 🔥 FIX: Populate sender info
-// exports.getMessages = async (req, res) => {
-//   const messages = await Message.find({ roomId: req.params.roomId })
-//     .populate("sender", "name email avatar")
-//     .sort({ createdAt: 1 }); // Sort by oldest first
-
-//   res.json(messages);
-// };
-
+// Get messages
 exports.getMessages = async (req, res) => {
   const userId = req.session.user._id;
   const roomId = req.params.roomId;
 
-  try {
-    await redisClient.del(`chat:unread:${userId}:${roomId}`);
-  } catch {
-    console.warn("Redis unavailable, unread reset skipped");
-  }
-
+  await redisService.del(`chat:unread:${userId}:${roomId}`);
 
   const messages = await Message.find({ roomId })
     .populate("sender", "name email avatar")
@@ -58,7 +45,7 @@ exports.getMessages = async (req, res) => {
 };
 
 
-// ✅ FIX 3: Send file message - backend emits receive-message
+// Send file message
 exports.sendFileMessage = async (req, res) => {
   const { roomId } = req.body;
   const userId = req.session.user._id;
@@ -88,14 +75,11 @@ exports.sendFileMessage = async (req, res) => {
     }
   });
 
-  // ✅ Populate sender info
   await message.populate("sender", "name email avatar");
 
-  // ✅ FIX: Get all sockets in the room and emit to others (not uploader)
   const io = req.app.get("io");
   const socketsInRoom = await io.in(roomId).fetchSockets();
   
-  // Emit to everyone in the room EXCEPT the uploader
   socketsInRoom.forEach(socket => {
     if (socket.request.session?.user?._id?.toString() !== userId.toString()) {
       socket.emit("receive-message", message);
@@ -104,7 +88,6 @@ exports.sendFileMessage = async (req, res) => {
 
   console.log(`📎 File message sent to room ${roomId} by ${userId}`);
 
-  // Send populated message back to uploader
   res.json(message);
 };
 
@@ -137,7 +120,6 @@ exports.deleteMessageForEveryone = async (req, res) => {
   message.deletedForEveryone = true;
   await message.save();
 
-  // 🔥 Real-time update
   req.app.get("io").to(message.roomId.toString()).emit(
     "message-deleted",
     { messageId }
@@ -162,12 +144,6 @@ exports.getUnreadCountByRoom = async (req, res) => {
   const userId = req.session.user._id;
   const { roomId } = req.params;
 
-  try {
-    const count = await redisClient.get(`chat:unread:${userId}:${roomId}`);
-    res.json({ unread: Number(count) || 0 });
-  } catch {
-    res.json({ unread: 0 });
-  }
+  const count = await redisService.get(`chat:unread:${userId}:${roomId}`);
+  res.json({ unread: Number(count) || 0 });
 };
-
-

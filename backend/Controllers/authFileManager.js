@@ -1,6 +1,13 @@
-const FileManager = require('../Models/FileManager');
-const GoogleDriveController = require('./googleDriveController');
+const dbFileService = require("../Services/dbFileService");
+const googleDriveService = require("../Services/googleDriveService");
 
+// Helper to broadcast changes via socket
+const broadcastChange = (req, owner, action, itemData) => {
+  const io = req.app.get("io");
+  if (io) {
+    io.emit("file:changed", { action, item: itemData, owner });
+  }
+};
 
 // Create a text file and save it to Google Drive + MongoDB
 exports.createTextFile = async (req, res) => {
@@ -16,14 +23,14 @@ exports.createTextFile = async (req, res) => {
     const buffer = Buffer.from(content || "", "utf-8");
 
     // Upload to Google Drive directly
-    const driveResponse = await GoogleDriveController.uploadFileFromBuffer({
+    const driveResponse = await googleDriveService.uploadFileFromBuffer({
       originalname: fileName,
       mimetype: "text/plain",
       buffer,
-    });
+    }, owner);
 
     // Save metadata to MongoDB
-    const newFile = new FileManager({
+    const newFile = await dbFileService.createFileMetadata({
       name: fileName,
       type: "file",
       parentId: parentId || null,
@@ -33,7 +40,7 @@ exports.createTextFile = async (req, res) => {
       mimeType: "text/plain",
     });
 
-    await newFile.save();
+    broadcastChange(req, owner, "create", newFile);
 
     res.status(201).json({
       message: "Text file created successfully",
@@ -45,35 +52,6 @@ exports.createTextFile = async (req, res) => {
   }
 };
 
-
-// Upload text file directly from buffer
-exports.uploadFileDirect = async (fileObj) => {
-  const { google } = require("googleapis");
-  const drive = google.drive({ version: "v3", auth: oauth2Client });
-
-  const stream = require("stream");
-  const bufferStream = new stream.PassThrough();
-  bufferStream.end(fileObj.buffer);
-
-  const response = await drive.files.create({
-    requestBody: {
-      name: fileObj.originalname,
-      mimeType: fileObj.mimetype,
-    },
-    media: {
-      mimeType: fileObj.mimetype,
-      body: bufferStream,
-    },
-    fields: "id, webViewLink, webContentLink",
-  });
-
-  return {
-    id: response.data.id,
-    viewLink: response.data.webViewLink,
-    downloadLink: response.data.webContentLink,
-  };
-};
-
 // Get all text files for a user (local + Drive metadata)
 exports.getTextFiles = async (req, res) => {
   try {
@@ -82,13 +60,13 @@ exports.getTextFiles = async (req, res) => {
     const query = { mimeType: "text/plain", trashed: false };
     if (owner) query.owner = owner;
 
-    // Fetch text files from MongoDB
-    const textFiles = await FileManager.find(query).sort({ name: 1 });
+    const textFiles = await dbFileService.searchByName(".txt", false);
+    const filteredFiles = owner ? textFiles.filter(f => f.owner === owner) : textFiles;
 
     res.status(200).json({
       message: "Text files fetched successfully",
-      count: textFiles.length,
-      files: textFiles,
+      count: filteredFiles.length,
+      files: filteredFiles,
     });
   } catch (err) {
     console.error("Error fetching text files:", err);
@@ -102,12 +80,12 @@ exports.updateTextFile = async (req, res) => {
     const { id } = req.params;  // File ID in MongoDB
     const { content } = req.body;
 
-    if (!content) {
+    if (content === undefined) {
       return res.status(400).json({ error: "Content is required" });
     }
 
     // Find file in DB
-    const file = await FileManager.findById(id);
+    const file = await dbFileService.getFileById(id);
     if (!file) {
       return res.status(404).json({ error: "File not found" });
     }
@@ -119,15 +97,18 @@ exports.updateTextFile = async (req, res) => {
     const buffer = Buffer.from(content, "utf-8");
 
     // Update on Google Drive
-    const driveResponse = await GoogleDriveController.updateFileContent(
+    const driveResponse = await googleDriveService.updateFileContent(
       file.googleDriveId,
       buffer,
-      "text/plain"
+      "text/plain",
+      file.owner
     );
 
     // Update size in MongoDB
     file.size = buffer.length;
     await file.save();
+
+    broadcastChange(req, file.owner, "update", file);
 
     res.status(200).json({
       message: "Text file updated successfully",
@@ -140,9 +121,7 @@ exports.updateTextFile = async (req, res) => {
   }
 };
 
-
-
-//Create a folder
+// Create a folder
 exports.createFolder = async (req, res) => {
   try {
     const { name, parentId, owner } = req.body;
@@ -151,14 +130,14 @@ exports.createFolder = async (req, res) => {
       return res.status(400).json({ message: "Name and owner are required" });
     }
 
-    const folder = new FileManager({
+    const folder = await dbFileService.createFileMetadata({
       name,
       type: "folder",
-      parentId: parentId || null, // root if no parentId
+      parentId: parentId || null,
       owner
     });
 
-    await folder.save();
+    broadcastChange(req, owner, "create", folder);
 
     res.status(201).json({
       message: "Folder created successfully",
@@ -170,18 +149,16 @@ exports.createFolder = async (req, res) => {
   }
 };
 
-
 // Get all files and folders for a specific user
 exports.getItemsByUser = async (req, res) => {
   try {
-    const { userId } = req.params; // get userId from URL
+    const { userId } = req.params;
 
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
     }
 
-    // Fetch all items owned by the user, excluding trashed by default
-    const items = await FileManager.find({ owner: userId, trashed: false }).sort({ type: -1, name: 1 });
+    const items = await dbFileService.getItemsByUser(userId, false);
 
     res.status(200).json({
       message: "User items fetched successfully",
@@ -194,30 +171,24 @@ exports.getItemsByUser = async (req, res) => {
   }
 };
 
-
-// Get Folder
+// Get Folder contents
 exports.getFolderContents = async (req, res) => {
   try {
-    const { id } = req.params; // folder ID (ObjectId)
-    let query = {};
+    const { id } = req.params;
+    let items;
 
     if (id === "root") {
-      // root folder: fetch items without a parent, exclude trashed
-      query = { parentId: null, trashed: false };
+      items = await dbFileService.getFolderContents("root", false);
     } else if (id === "trash") {
-      // Trash folder: fetch all trashed items
-      query = { trashed: true };
+      items = await dbFileService.getFolderContents("trash", true);
     } else {
-      // normal folder: fetch items with parentId = id, exclude trashed
-      query = { parentId: id, trashed: false };
+      items = await dbFileService.getFolderContents(id, false);
     }
-
-    const contents = await FileManager.find(query).sort({ type: -1, name: 1 });
 
     res.status(200).json({
       message: "Folder contents fetched successfully",
       folderId: id,
-      items: contents,
+      items,
     });
   } catch (error) {
     console.error("Error fetching folder contents:", error);
@@ -225,87 +196,94 @@ exports.getFolderContents = async (req, res) => {
   }
 };
 
-
-
+// Upload file to Manager (combined local index + cloud storage)
 exports.uploadFileToManager = async (req, res) => {
   try {
     const { parentId, owner } = req.body;
 
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // Upload file to Google Drive
-    await GoogleDriveController.uploadFile(req, res);
+    let fileBuffer = req.file.buffer;
+    if (!fileBuffer && req.file.path) {
+      const fs = require("fs");
+      fileBuffer = fs.readFileSync(req.file.path);
+    }
 
-    // At this point, res.json has already been sent by uploadFile
-    // So we can save metadata in MongoDB but cannot send another res
-    const newFile = new FileManager({
+    // Upload file to Google Drive using the service
+    const driveRes = await googleDriveService.uploadFile({
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      buffer: fileBuffer
+    }, owner);
+
+    // Delete temp file from local disk if exists
+    if (req.file.path) {
+      const fs = require("fs");
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error("Temp file deletion error:", err);
+      });
+    }
+
+    // Save metadata in MongoDB
+    const newFile = await dbFileService.createFileMetadata({
       name: req.file.originalname,
       type: "file",
-      parentId: parentId || null, // points to folder in MongoDB
+      parentId: parentId || null,
       owner,
-      googleDriveId: req.file.driveFileId, // temporarily store name, you can update with actual Drive ID if needed
+      googleDriveId: driveRes.id,
       size: req.file.size,
       mimeType: req.file.mimetype,
     });
 
-    await newFile.save();
-    console.log("File metadata saved in MongoDB");
+    broadcastChange(req, owner, "create", newFile);
 
-    // Do NOT call res.json here because GoogleDriveController.uploadFile already sent response
+    res.status(201).json({
+      message: "File uploaded successfully",
+      fileId: driveRes.id,
+      name: driveRes.name,
+      webViewLink: driveRes.webViewLink,
+      file: newFile
+    });
   } catch (err) {
     console.error("FileManager Upload Error:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(500).json({ error: err.message });
   }
 };
 
+// Move file to trash (Bin)
 exports.moveFileToTrash = async (req, res) => {
   try {
-    const { id } = req.params; // MongoDB file ID
+    const { id } = req.params;
 
-    // 1️⃣ Find the file in MongoDB
-    const file = await FileManager.findById(id);
+    const file = await dbFileService.getFileById(id);
     if (!file || file.type !== "file") {
       return res.status(404).json({ error: "File not found" });
     }
 
-    // 2️⃣ Move to trash in Google Drive if it has a Drive ID
     if (file.googleDriveId) {
       try {
-        await GoogleDriveController.moveFileToTrash(
-          { params: { fileId: file.googleDriveId } },
-          {
-            status: () => ({ json: () => { } }), // dummy response
-            json: () => { }
-          }
-        );
+        await googleDriveService.moveFileToTrash(file.googleDriveId, file.owner);
       } catch (err) {
         console.error("Error moving file to Drive trash:", err.message);
         return res.status(500).json({ error: "Failed to move file to Drive trash" });
       }
     }
 
-    // 3️⃣ Mark file as trashed in MongoDB
-    file.trashed = true;
-    await file.save();
+    const updatedFile = await dbFileService.setItemTrashed(id, true);
+    broadcastChange(req, file.owner, "trash", id);
 
-    res.status(200).json({ message: "File moved to trash successfully", file });
+    res.status(200).json({ message: "File moved to trash successfully", file: updatedFile });
   } catch (err) {
     console.error("Error moving file to trash:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-
-
-
-
-// Permanently delete a file from Drive and MongoDB
+// Permanently delete a file
 exports.deleteFile = async (req, res) => {
   try {
     const { id } = req.params;
-    const file = await FileManager.findById(id);
+    const file = await dbFileService.getFileById(id);
 
     if (!file || file.type !== "file") {
       return res.status(404).json({ error: "File not found" });
@@ -315,21 +293,17 @@ exports.deleteFile = async (req, res) => {
       return res.status(400).json({ error: "File must be in trash to permanently delete" });
     }
 
-    // Permanently delete from Google Drive
     if (file.googleDriveId) {
       try {
-        await GoogleDriveController.deleteFile({ params: { fileId: file.googleDriveId } }, {
-          status: () => ({ json: () => { } }),
-          json: () => { }
-        });
+        await googleDriveService.deleteFile(file.googleDriveId, file.owner);
       } catch (err) {
         console.error("Error permanently deleting file from Drive:", err.message);
         return res.status(500).json({ error: "Failed to delete file from Drive permanently" });
       }
     }
 
-    // Delete from MongoDB
-    await FileManager.findByIdAndDelete(id);
+    await dbFileService.deleteItemRecord(id);
+    broadcastChange(req, file.owner, "delete", id);
 
     res.status(200).json({ message: "File permanently deleted" });
   } catch (err) {
@@ -338,21 +312,33 @@ exports.deleteFile = async (req, res) => {
   }
 };
 
-// Controller: delete folder
+// Permanently delete a folder and all contents recursively
 exports.deleteFolder = async (req, res) => {
   try {
     const { id } = req.params;
-    const folder = await FileManager.findById(id);
+    const folder = await dbFileService.getFileById(id);
 
     if (!folder || folder.type !== "folder") {
       return res.status(404).json({ error: "Folder not found" });
     }
 
-    // Delete all contents recursively
-    await deleteFolderContents(id);
+    // Recursively collect all items inside folder
+    const children = await dbFileService.getAllTrashedChildren(id);
+
+    for (const child of children) {
+      if (child.type === "file" && child.googleDriveId) {
+        try {
+          await googleDriveService.deleteFile(child.googleDriveId, child.owner);
+        } catch (err) {
+          console.error(`Error deleting child file ${child.name} from Drive:`, err.message);
+        }
+      }
+      await dbFileService.deleteItemRecord(child._id);
+    }
 
     // Delete the folder itself
-    await FileManager.findByIdAndDelete(id);
+    await dbFileService.deleteItemRecord(id);
+    broadcastChange(req, folder.owner, "delete", id);
 
     res.status(200).json({ message: "Folder and its contents deleted successfully" });
   } catch (err) {
@@ -361,75 +347,36 @@ exports.deleteFolder = async (req, res) => {
   }
 };
 
-// Recursive helper to permanently delete folder contents
-async function deleteFolderContents(folderId) {
-  const items = await FileManager.find({ parentId: folderId });
-
-  for (const item of items) {
-    if (item.type === "folder") {
-      // recursively delete subfolder contents
-      await deleteFolderContents(item._id);
-      // delete the folder itself
-      await FileManager.findByIdAndDelete(item._id);
-    } else if (item.type === "file") {
-      // delete from Google Drive if exists
-      if (item.googleDriveId) {
-        try {
-          await GoogleDriveController.deleteFile(
-            { params: { fileId: item.googleDriveId } },
-            { status: () => ({ json: () => { } }), json: () => { } }
-          );
-        } catch (err) {
-          console.error("Error deleting file from Drive:", err.message);
-        }
-      }
-      // delete from MongoDB
-      await FileManager.findByIdAndDelete(item._id);
-    }
-  }
-}
-
-
-
-// Rename a file or folder
+// Rename an item (file or folder)
 exports.renameItem = async (req, res) => {
   try {
-    const { id } = req.params;      // MongoDB document ID
-    const { newName } = req.body;   // new name from client
+    const { id } = req.params;
+    const { newName } = req.body;
 
     if (!newName || newName.trim() === "") {
       return res.status(400).json({ error: "New name is required" });
     }
 
-    // Find item in MongoDB
-    const item = await FileManager.findById(id);
+    const item = await dbFileService.getFileById(id);
     if (!item) {
       return res.status(404).json({ error: "Item not found" });
     }
 
-    // If it's a file stored on Google Drive, also rename there
     if (item.type === "file" && item.googleDriveId) {
       try {
-        await GoogleDriveController.updateFileName(
-          { params: { fileId: item.googleDriveId }, body: { name: newName } },
-          {
-            status: () => ({ json: () => { } }), // mock response
-            json: () => { }
-          }
-        );
+        await googleDriveService.updateFileName(item.googleDriveId, newName, item.owner);
       } catch (err) {
         console.error("Error renaming on Google Drive:", err.message);
         return res.status(500).json({ error: "Failed to rename on Google Drive" });
       }
     }
 
-    // Update MongoDB
-    item.name = newName;
-    await item.save();
+    const updatedItem = await dbFileService.renameItem(id, newName);
+    broadcastChange(req, item.owner, "update", updatedItem);
 
     res.status(200).json({
       message: "Item renamed successfully",
-      item,
+      item: updatedItem,
     });
   } catch (err) {
     console.error("Error renaming item:", err);
@@ -437,66 +384,44 @@ exports.renameItem = async (req, res) => {
   }
 };
 
-// Recursive helper: move all contents of a folder to trash
-async function moveFolderContentsToTrash(folderId) {
-  const items = await FileManager.find({ parentId: folderId, trashed: false });
-
-  for (const item of items) {
-    if (item.type === "folder") {
-      // Recursively move subfolder to trash
-      await moveFolderContentsToTrash(item._id);
-      await FileManager.findByIdAndUpdate(item._id, { trashed: true });
-    } else if (item.type === "file") {
-      // Move file to Google Drive trash
-      if (item.googleDriveId) {
-        try {
-          await GoogleDriveController.moveFileToTrash(
-            { params: { fileId: item.googleDriveId } },
-            {
-              status: () => ({ json: () => { } }),
-              json: () => { }
-            }
-          );
-        } catch (err) {
-          console.error("Error moving file to Drive trash:", err.message);
-        }
-      }
-      await FileManager.findByIdAndUpdate(item._id, { trashed: true });
-    }
-  }
-}
-
-// Controller: move folder itself to trash
+// Move folder itself to trash
 exports.moveFolderToTrash = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const folder = await FileManager.findById(id);
+    const folder = await dbFileService.getFileById(id);
     if (!folder || folder.type !== "folder") {
       return res.status(404).json({ error: "Folder not found" });
     }
 
-    // Move all contents to trash first
-    await moveFolderContentsToTrash(id);
+    // Recursively collect children
+    const children = await dbFileService.getAllTrashedChildren(id);
 
-    // Mark folder itself as trashed
-    folder.trashed = true;
-    await folder.save();
+    for (const child of children) {
+      if (child.type === "file" && child.googleDriveId) {
+        try {
+          await googleDriveService.moveFileToTrash(child.googleDriveId, child.owner);
+        } catch (err) {
+          console.error("Error moving child to Drive trash:", err.message);
+        }
+      }
+      await dbFileService.setItemTrashed(child._id, true);
+    }
 
-    res.status(200).json({ message: "Folder and its contents moved to trash" });
+    const updatedFolder = await dbFileService.setItemTrashed(id, true);
+    broadcastChange(req, folder.owner, "trash", id);
+
+    res.status(200).json({ message: "Folder and its contents moved to trash", folder: updatedFolder });
   } catch (err) {
     console.error("Error moving folder to trash:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-
 // Get all items in Trash
 exports.getTrashContents = async (req, res) => {
   try {
-    // Fetch all items marked as trashed
-    const trashedItems = await FileManager.find({ trashed: true }).sort({ type: -1, name: 1 });
-
+    const trashedItems = await dbFileService.getFolderContents("trash", true);
     res.status(200).json({
       message: "Trash contents fetched successfully",
       items: trashedItems,
@@ -507,52 +432,33 @@ exports.getTrashContents = async (req, res) => {
   }
 };
 
+// List Google Drive trashed files
 exports.listTrashedFiles = async (req, res) => {
   try {
-    // Directly call the controller function
-    await GoogleDriveController.listTrashedFiles(req, res);
+    const files = await googleDriveService.listTrashedFiles(req.session.user._id);
+    res.json(files);
   } catch (err) {
-    console.error("Error listing trashed files in FileManager:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
-    }
+    console.error("Error listing trashed files:", err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-
-
-// Move folder (or file) to another folder
+// Move item (change parentId)
 exports.moveItem = async (req, res) => {
   try {
-    const { id } = req.params;         // ID of folder/file to move
-    const { newParentId } = req.body;  // Target folder ID (null for root)
+    const { id } = req.params;
+    const { newParentId } = req.body;
 
-    // Validate input
     if (!id) {
       return res.status(400).json({ error: "Item ID is required" });
     }
 
-    // Fetch the item
-    const item = await FileManager.findById(id);
-    if (!item) {
-      return res.status(404).json({ error: "Item not found" });
-    }
-
-    // Optionally, check if newParentId exists (skip if null for root)
-    if (newParentId) {
-      const parentFolder = await FileManager.findById(newParentId);
-      if (!parentFolder || parentFolder.type !== "folder") {
-        return res.status(400).json({ error: "Target folder does not exist" });
-      }
-    }
-
-    // Update parentId
-    item.parentId = newParentId || null; // null means root folder
-    await item.save();
+    const updatedItem = await dbFileService.moveItem(id, newParentId);
+    broadcastChange(req, updatedItem.owner, "update", updatedItem);
 
     res.status(200).json({
-      message: `${item.type} moved successfully`,
-      item,
+      message: `${updatedItem.type} moved successfully`,
+      item: updatedItem,
     });
   } catch (err) {
     console.error("Error moving item:", err);
@@ -560,13 +466,12 @@ exports.moveItem = async (req, res) => {
   }
 };
 
-// Get a single file's details and optionally content link
+// Get a single file details
 exports.getFile = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find file in MongoDB
-    const file = await FileManager.findById(id);
+    const file = await dbFileService.getFileById(id);
     if (!file || file.type !== "file") {
       return res.status(404).json({ error: "File not found" });
     }
@@ -585,15 +490,13 @@ exports.getFile = async (req, res) => {
       updatedAt: file.updatedAt
     };
 
-    // If file is on Google Drive, get the download/view link
     if (file.googleDriveId) {
       try {
-        const driveFile = await GoogleDriveController.getFile(file.googleDriveId);
-        // getFile in GoogleDriveController should return { viewLink, downloadLink, ... }
+        const driveFile = await googleDriveService.generateFileLink(file.googleDriveId, file.owner);
         fileData.viewLink = driveFile.viewLink;
         fileData.downloadLink = driveFile.downloadLink;
       } catch (err) {
-        console.error("Error fetching Google Drive file info:", err.message);
+        console.error("Error fetching Google Drive link info:", err.message);
       }
     }
 
@@ -607,101 +510,56 @@ exports.getFile = async (req, res) => {
   }
 };
 
-
-// Helper to restore a file in Drive
-async function restoreFileInDrive(fileId) {
-  const req = { params: { fileId } };
-  const res = {
-    statusCode: 200,
-    status: function (code) {
-      this.statusCode = code;
-      return this;
-    },
-    json: function (data) {
-      if (this.statusCode >= 400) throw new Error(data.error || "Error restoring file in Drive");
-      return data;
-    }
-  };
-
-  await GoogleDriveController.restoreFileFromTrash(req, res);
-}
-
-// Recursive helper to restore folder contents
-async function restoreFolderContents(folderId) {
-  const items = await FileManager.find({ parentId: folderId, trashed: true });
-
-  for (const item of items) {
-    if (item.type === "folder") {
-      await restoreFolderContents(item._id);
-    } else if (item.type === "file" && item.googleDriveId) {
-      try {
-        await restoreFileInDrive(item.googleDriveId);
-      } catch (err) {
-        console.error("Error restoring file in Drive:", err.message);
-      }
-    }
-
-    item.trashed = false;
-    await item.save();
-  }
-}
-
-// Restore a file or folder from trash
+// Restore item from trash
 exports.restoreItem = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const item = await FileManager.findById(id);
+    const item = await dbFileService.getFileById(id);
     if (!item || !item.trashed) {
       return res.status(404).json({ error: "Item not found or not trashed" });
     }
 
-    // If it's a file on Google Drive, untrash there too
     if (item.type === "file" && item.googleDriveId) {
       try {
-        await restoreFileInDrive(item.googleDriveId);
+        await googleDriveService.restoreFileFromTrash(item.googleDriveId, item.owner);
       } catch (err) {
         console.error("Error restoring file on Google Drive:", err.message);
       }
+    } else if (item.type === "folder") {
+      const children = await dbFileService.getAllTrashedChildren(item._id);
+      for (const child of children) {
+        if (child.type === "file" && child.googleDriveId) {
+          try {
+            await googleDriveService.restoreFileFromTrash(child.googleDriveId, child.owner);
+          } catch (err) {
+            console.error("Error restoring child file in Drive:", err.message);
+          }
+        }
+        await dbFileService.setItemTrashed(child._id, false);
+      }
     }
 
-    // If it's a folder, recursively restore its contents
-    if (item.type === "folder") {
-      await restoreFolderContents(item._id);
-    }
+    const restoredItem = await dbFileService.setItemTrashed(id, false);
+    broadcastChange(req, item.owner, "restore", restoredItem);
 
-    // Restore the item itself
-    item.trashed = false;
-    await item.save();
-
-    res.status(200).json({ message: "Item restored successfully", item });
+    res.status(200).json({ message: "Item restored successfully", item: restoredItem });
   } catch (err) {
     console.error("Error restoring item:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-// Search files/folders by name
+// Search by name
 exports.searchByName = async (req, res) => {
   try {
-    const { name } = req.query;
-    const { includeTrashed } = req.query; // optional: "true" to include trashed items
+    const { name, includeTrashed } = req.query;
 
     if (!name || name.trim() === "") {
       return res.status(400).json({ error: "Search query is required" });
     }
 
-    // Build search query
-    const query = {
-      name: { $regex: name, $options: "i" } // case-insensitive search
-    };
-
-    // Exclude trashed items by default
-    if (!includeTrashed || includeTrashed !== "true") {
-      query.trashed = false;
-    }
-
-    const results = await FileManager.find(query).sort({ type: -1, name: 1 });
+    const results = await dbFileService.searchByName(name, includeTrashed === "true");
 
     res.status(200).json({
       message: "Search results fetched successfully",
@@ -714,39 +572,11 @@ exports.searchByName = async (req, res) => {
   }
 };
 
-
-// Sort files/folders
+// Sort items
 exports.sortItems = async (req, res) => {
   try {
     const { sortBy, order, includeTrashed } = req.query;
-
-    // Determine sort order
-    const sortOrder = order === "desc" ? -1 : 1;
-
-    // Build sort object
-    let sortObj = {};
-
-    switch (sortBy) {
-      case "name":
-        sortObj = { name: sortOrder };
-        break;
-      case "type":
-        sortObj = { type: sortOrder, name: 1 }; // folders first, then files, then name
-        break;
-      case "size":
-        sortObj = { size: sortOrder, name: 1 }; // sort by size, then name
-        break;
-      default:
-        sortObj = { name: 1 }; // default sort by name ascending
-    }
-
-    // Build query
-    const query = {};
-    if (!includeTrashed || includeTrashed !== "true") {
-      query.trashed = false; // exclude trashed items by default
-    }
-
-    const items = await FileManager.find(query).sort(sortObj);
+    const items = await dbFileService.sortItems(sortBy, order, includeTrashed === "true");
 
     res.status(200).json({
       message: "Items sorted successfully",
@@ -759,26 +589,20 @@ exports.sortItems = async (req, res) => {
   }
 };
 
-
-// Copy an item (file or folder)
+// Clipboard helpers
 exports.cutItem = async (req, res) => {
   try {
     const { sourceId, action } = req.body;
-
-    const item = await FileManager.findById(sourceId);
+    const item = await dbFileService.getFileById(sourceId);
     if (!item) {
       return res.status(404).json({ message: "Item not found" });
     }
-
-    // store in memory or session
     req.session.copyData = { sourceId, action };
-
     return res.status(200).json({ message: "Item copied successfully", copyData: req.session.copyData });
   } catch (error) {
     res.status(500).json({ message: "Error copying item", error });
   }
 };
-
 
 exports.copyItem = async (req, res) => {
   try {
@@ -787,113 +611,88 @@ exports.copyItem = async (req, res) => {
     if (!sourceId) return res.status(400).json({ error: "Source ID is required" });
     if (!targetId) return res.status(400).json({ error: "Target folder ID is required" });
 
-    const sourceItem = await FileManager.findById(sourceId);
+    const sourceItem = await dbFileService.getFileById(sourceId);
     if (!sourceItem) return res.status(404).json({ error: "Source item not found" });
-
-    const targetFolder = await FileManager.findById(targetId);
-    if (!targetFolder || targetFolder.type !== "folder") {
-      return res.status(400).json({ error: "Target folder not found" });
-    }
 
     let newItem;
 
     if (sourceItem.type === "folder") {
-      // Recursive copy for folders
       newItem = await copyFolderRecursively(sourceId, targetId, sourceItem.owner);
     } else if (sourceItem.type === "file") {
-      newItem = new FileManager({
+      newItem = await dbFileService.createFileMetadata({
         name: `copy_of_${sourceItem.name}`,
         type: "file",
-        parentId: targetId, // this is where the copy will go
+        parentId: targetId,
         owner: sourceItem.owner,
         googleDriveId: sourceItem.googleDriveId,
         size: sourceItem.size,
         mimeType: sourceItem.mimeType
       });
-      await newItem.save();
     }
+
+    broadcastChange(req, sourceItem.owner, "create", newItem);
 
     res.status(200).json({
       message: `${sourceItem.type} copied successfully`,
       item: newItem
     });
-
   } catch (err) {
     console.error("Error copying item:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-
-// Recursive helper to copy folder and its children
+// Recursive helper to copy folder
 async function copyFolderRecursively(sourceFolderId, targetFolderId, owner) {
-  // Find the source folder
-  const folder = await FileManager.findById(sourceFolderId);
+  const folder = await dbFileService.getFileById(sourceFolderId);
   if (!folder || folder.type !== "folder") return null;
 
-  // Create a copy of the folder in the target folder
-  const folderCopy = new FileManager({
+  const folderCopy = await dbFileService.createFileMetadata({
     name: `copy_of_${folder.name}`,
     type: "folder",
     parentId: targetFolderId || null,
     owner
   });
-  await folderCopy.save();
 
-  // Find all children of the source folder
-  const children = await FileManager.find({ parentId: sourceFolderId });
+  const children = await dbFileService.getFolderContents(sourceFolderId, false);
 
-  // Recursively copy children
   for (const child of children) {
     if (child.type === "folder") {
       await copyFolderRecursively(child._id, folderCopy._id, owner);
     } else if (child.type === "file") {
-      // Copy file
-      const fileCopy = new FileManager({
+      await dbFileService.createFileMetadata({
         name: `copy_of_${child.name}`,
         type: "file",
         parentId: folderCopy._id,
         owner,
-        googleDriveId: child.googleDriveId, // Optional: could duplicate in Drive
+        googleDriveId: child.googleDriveId,
         size: child.size,
         mimeType: child.mimeType
       });
-      await fileCopy.save();
     }
   }
 
   return folderCopy;
 }
 
-
-
-// Paste an item (after copy)
-// Paste / Move item to existing folder
+// Paste / Move
 exports.pasteItem = async (req, res) => {
   try {
     const { sourceId, targetId } = req.body;
 
-    const sourceItem = await FileManager.findById(sourceId);
+    const sourceItem = await dbFileService.getFileById(sourceId);
     if (!sourceItem) {
       return res.status(404).json({ error: "Source item not found" });
     }
 
-    // Check target folder
-    if (targetId) {
-      const targetFolder = await FileManager.findById(targetId);
-      if (!targetFolder || targetFolder.type !== "folder") {
-        return res.status(400).json({ error: "Target folder does not exist" });
-      }
-    }
-
     if (sourceItem.type === "folder") {
-      // Move folder recursively
       await moveFolderRecursively(sourceId, targetId || null);
     } else {
-      // Move file
       sourceItem.parentId = targetId || null;
       await sourceItem.save();
     }
+
+    broadcastChange(req, sourceItem.owner, "update", sourceItem);
 
     res.status(200).json({
       message: `${sourceItem.type} moved successfully`,
@@ -904,56 +703,33 @@ exports.pasteItem = async (req, res) => {
   }
 };
 
-
-// Recursive helper to move folder and all its children
+// Recursive helper to move
 async function moveFolderRecursively(folderId, newParentId) {
-  // Move the folder itself
-  await FileManager.findByIdAndUpdate(folderId, { parentId: newParentId });
-
-  // Find all children
-  const children = await FileManager.find({ parentId: folderId });
+  await dbFileService.moveItem(folderId, newParentId);
+  const children = await dbFileService.getFolderContents(folderId, false);
 
   for (const child of children) {
     if (child.type === "folder") {
-      // Recursively move subfolder
       await moveFolderRecursively(child._id, folderId);
     } else if (child.type === "file") {
-      // Move file
-      await FileManager.findByIdAndUpdate(child._id, { parentId: folderId });
+      await dbFileService.moveItem(child._id, folderId);
     }
   }
 }
 
-
-// Stream or display file content (images, videos, text, etc.)
+// Stream Google Drive file
 exports.displayFileContent = async (req, res) => {
   try {
-    const drive = getDrive();
     const fileId = req.params.fileId;
-
     if (!fileId) {
       return res.status(400).json({ error: "File ID is required" });
     }
 
-    // Get metadata to know file type
-    const metadata = await drive.files.get({
-      fileId: fileId,
-      fields: "id, name, mimeType"
-    });
-
-    const mimeType = metadata.data.mimeType || "application/octet-stream";
-
-    // Stream file content
-    const fileStream = await drive.files.get(
-      { fileId: fileId, alt: "media" },
-      { responseType: "stream" }
-    );
+    const { mimeType, stream } = await googleDriveService.displayFileContent(fileId, req.session.user._id);
 
     res.setHeader("Content-Type", mimeType);
     res.setHeader("Cache-Control", "no-cache");
-
-    // Stream directly to browser
-    fileStream.data.pipe(res);
+    stream.pipe(res);
   } catch (err) {
     console.error("Error displaying file content:", err);
     res.status(500).json({ error: err.message });

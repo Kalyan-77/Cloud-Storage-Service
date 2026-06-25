@@ -1,6 +1,6 @@
 const Perplexity = require("@perplexity-ai/perplexity_ai");
 const Configuration = require('../Models/ConfigModel');
-const redisClient = require("../Config/redis");
+const redisService = require("../Services/redisService");
 
 // --------------------------------------
 // @desc    Chat with Perplexity AI
@@ -32,33 +32,14 @@ exports.perplexityChat = async (req, res) => {
     let userConfig;
     let apiKey;
 
-    try {
-      // Try to get from Redis cache first
-      const cachedConfig = await redisClient.get(cacheKey);
-      
-      if (cachedConfig) {
-        userConfig = JSON.parse(cachedConfig);
-        apiKey = userConfig.perplexity_API;
-      } else {
-        // Fetch from MongoDB if not in cache
-        userConfig = await Configuration.findOne({ userId });
-        
-        if (!userConfig) {
-          return res.status(404).json({
-            success: false,
-            message: "User configuration not found. Please configure your API key first."
-          });
-        }
-
-        apiKey = userConfig.perplexity_API;
-
-        // Cache the config for future requests
-        await redisClient.setEx(cacheKey, 600, JSON.stringify(userConfig));
-      }
-    } catch (cacheError) {
-      console.warn("Redis error, falling back to MongoDB:", cacheError);
-      
-      // Fallback to MongoDB directly
+    // Try to get from Redis cache first
+    const cachedConfig = await redisService.get(cacheKey);
+    
+    if (cachedConfig) {
+      userConfig = JSON.parse(cachedConfig);
+      apiKey = userConfig.perplexity_API;
+    } else {
+      // Fetch from MongoDB if not in cache
       userConfig = await Configuration.findOne({ userId });
       
       if (!userConfig) {
@@ -69,6 +50,9 @@ exports.perplexityChat = async (req, res) => {
       }
 
       apiKey = userConfig.perplexity_API;
+
+      // Cache the config for future requests
+      await redisService.setEx(cacheKey, 600, JSON.stringify(userConfig));
     }
 
     // Validate API key exists

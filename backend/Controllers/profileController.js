@@ -1,5 +1,5 @@
 const Users = require("../Models/Users");
-const redisClient = require("../Config/redis");
+const redisService = require("../Services/redisService");
 
 exports.getMyProfile = async (req, res) => {
   const userId = req.session.user._id;
@@ -7,12 +7,7 @@ exports.getMyProfile = async (req, res) => {
 
   try {
     // 1️⃣ Check Redis
-    let cachedProfile;
-    try {
-      cachedProfile = await redisClient.get(cacheKey);
-    } catch {
-      console.warn("Redis unavailable, skipping profile cache");
-    }
+    const cachedProfile = await redisService.get(cacheKey);
 
     if (cachedProfile) {
       return res.json(JSON.parse(cachedProfile));
@@ -26,7 +21,7 @@ exports.getMyProfile = async (req, res) => {
     }
 
     // 3️⃣ Save to Redis (5 minutes)
-    await redisClient.setEx(
+    await redisService.setEx(
       cacheKey,
       300,
       JSON.stringify(user)
@@ -37,7 +32,6 @@ exports.getMyProfile = async (req, res) => {
     console.error("getMyProfile error:", err);
     res.status(500).json({ message: "Server error" });
   }
-
 };
 
 exports.updateProfile = async (req, res) => {
@@ -62,9 +56,9 @@ exports.updateProfile = async (req, res) => {
     name: user.name,
     avatar: user.avatar
   };
-  // 🔥 Clear profile cache
-  await redisClient.del(`profile:${req.session.user._id}`);
 
+  // 🔥 Clear profile cache
+  await redisService.del(`profile:${req.session.user._id}`);
 
   res.json(user);
 };

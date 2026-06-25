@@ -1,19 +1,13 @@
 const App = require("../Models/AppsModel");
-const redisClient = require("../Config/redis");
+const redisService = require("../Services/redisService");
 
-// --------------------------------------
 // Create a new app
-// --------------------------------------
 exports.createApp = async (req, res) => {
   try {
     const newApp = new App(req.body);
     await newApp.save();
-    try {
-      await redisClient.del("apps:all");
-    } catch {
-      console.warn("Redis unavailable, skipping apps cache invalidation");
-    }
 
+    await redisService.del("apps:all");
 
     res.status(201).json({
       success: true,
@@ -28,21 +22,13 @@ exports.createApp = async (req, res) => {
   }
 };
 
-// --------------------------------------
 // Get all apps
-// --------------------------------------
 exports.getAllApps = async (req, res) => {
-
   const cacheKey = "apps:all";
 
-  try{
-     // 1️⃣ Check Redis
-     let cacheApps;
-    try{
-      cacheApps = await redisClient.get(cacheKey);
-    }catch{
-      console.warn("Redis unavailable, skipping apps cache");
-    }
+  try {
+    // 1️⃣ Check Redis
+    const cacheApps = await redisService.get(cacheKey);
 
     if (cacheApps) {
       return res.json({
@@ -56,15 +42,7 @@ exports.getAllApps = async (req, res) => {
     const apps = await App.find();
 
     // 3️⃣ Save to Redis (10 minutes)
-    try {
-      await redisClient.setEx(
-        cacheKey,
-        600,
-        JSON.stringify(apps)
-      );
-    } catch {
-      console.warn("Redis unavailable, skipping apps cache write");
-    }
+    await redisService.setEx(cacheKey, 600, JSON.stringify(apps));
 
     res.json({
       success: true,
@@ -75,36 +53,16 @@ exports.getAllApps = async (req, res) => {
     console.error("getAllApps error:", error);
     res.status(500).json({ message: "Server error" });
   }
-  // try {
-  //   const apps = await App.find();
-
-  //   res.status(200).json({
-  //     success: true,
-  //     count: apps.length,
-  //     data: apps
-  //   });
-  // } catch (error) {
-  //   res.status(500).json({
-  //     success: false,
-  //     message: error.message
-  //   });
-  // }
 };
 
-// --------------------------------------
 // Get app by ID
-// --------------------------------------
 exports.getAppById = async (req, res) => {
-
   const { id } = req.params;
   const cacheKey = `apps:${id}`;
 
   try {
     // 1️⃣ Redis check
-    let cachedApp;
-    try {
-      cachedApp = await redisClient.get(cacheKey);
-    } catch {}
+    const cachedApp = await redisService.get(cacheKey);
 
     if (cachedApp) {
       return res.json({
@@ -121,15 +79,7 @@ exports.getAppById = async (req, res) => {
     }
 
     // 3️⃣ Cache result
-    try {
-      await redisClient.setEx(
-        cacheKey,
-        600,
-        JSON.stringify(app)
-      );
-    } catch {
-      console.warn("Redis unavailable, skipping app cache write");
-    }
+    await redisService.setEx(cacheKey, 600, JSON.stringify(app));
 
     res.json({
       success: true,
@@ -139,32 +89,9 @@ exports.getAppById = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: "Invalid App ID" });
   }
-  // try {
-  //   const app = await App.findById(req.params.id);
-
-  //   if (!app) {
-  //     return res.status(404).json({
-  //       success: false,
-  //       message: "App not found"
-  //     });
-  //   }
-
-  //   res.status(200).json({
-  //     success: true,
-  //     data: app
-  //   });
-  // } catch (error) {
-  //   res.status(500).json({
-  //     success: false,
-  //     message: "Invalid App ID"
-  //   });
-  // }
 };
 
-
-// --------------------------------------
 // Update app by ID
-// --------------------------------------
 exports.updateApp = async (req, res) => {
   try {
     const updatedApp = await App.findByIdAndUpdate(
@@ -180,13 +107,8 @@ exports.updateApp = async (req, res) => {
       });
     }
 
-    try {
-      await redisClient.del("apps:all");
-      await redisClient.del(`apps:${req.params.id}`);
-    } catch {
-      console.warn("Redis unavailable, skipping apps cache invalidation");
-    }
-
+    await redisService.del("apps:all");
+    await redisService.del(`apps:${req.params.id}`);
 
     res.status(200).json({
       success: true,
@@ -201,10 +123,7 @@ exports.updateApp = async (req, res) => {
   }
 };
 
-
-// --------------------------------------
 // Delete app by ID
-// --------------------------------------
 exports.deleteApp = async (req, res) => {
   try {
     const deletedApp = await App.findByIdAndDelete(req.params.id);
@@ -216,13 +135,8 @@ exports.deleteApp = async (req, res) => {
       });
     }
 
-    try {
-      await redisClient.del("apps:all");
-      await redisClient.del(`apps:${req.params.id}`);
-    } catch {
-      console.warn("Redis unavailable, skipping apps cache invalidation");
-    }
-
+    await redisService.del("apps:all");
+    await redisService.del(`apps:${req.params.id}`);
 
     res.status(200).json({
       success: true,
