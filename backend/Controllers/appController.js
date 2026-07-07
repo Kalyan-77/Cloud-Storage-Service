@@ -8,6 +8,8 @@ exports.createApp = async (req, res) => {
     await newApp.save();
 
     await redisService.del("apps:all");
+    await redisService.del("apps:system");
+    await redisService.del("apps:without_system");
 
     res.status(201).json({
       success: true,
@@ -108,6 +110,8 @@ exports.updateApp = async (req, res) => {
     }
 
     await redisService.del("apps:all");
+    await redisService.del("apps:system");
+    await redisService.del("apps:without_system");
     await redisService.del(`apps:${req.params.id}`);
 
     res.status(200).json({
@@ -136,6 +140,8 @@ exports.deleteApp = async (req, res) => {
     }
 
     await redisService.del("apps:all");
+    await redisService.del("apps:system");
+    await redisService.del("apps:without_system");
     await redisService.del(`apps:${req.params.id}`);
 
     res.status(200).json({
@@ -147,5 +153,71 @@ exports.deleteApp = async (req, res) => {
       success: false,
       message: "Invalid App ID"
     });
+  }
+};
+
+// Get only system apps
+exports.getSystemApps = async (req, res) => {
+  const cacheKey = "apps:system";
+
+  try {
+    // 1️⃣ Check Redis
+    const cacheApps = await redisService.get(cacheKey);
+
+    if (cacheApps) {
+      return res.json({
+        success: true,
+        source: "redis",
+        data: JSON.parse(cacheApps)
+      });
+    }
+
+    // 2️⃣ Fetch from MongoDB
+    const apps = await App.find({ category: "System Apps" });
+
+    // 3️⃣ Save to Redis (10 minutes)
+    await redisService.setEx(cacheKey, 600, JSON.stringify(apps));
+
+    res.json({
+      success: true,
+      source: "mongodb",
+      data: apps
+    });
+  } catch (error) {
+    console.error("getSystemApps error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Get apps without system apps
+exports.getAppsWithoutSystem = async (req, res) => {
+  const cacheKey = "apps:without_system";
+
+  try {
+    // 1️⃣ Check Redis
+    const cacheApps = await redisService.get(cacheKey);
+
+    if (cacheApps) {
+      return res.json({
+        success: true,
+        source: "redis",
+        data: JSON.parse(cacheApps)
+      });
+    }
+
+    // 2️⃣ Fetch from MongoDB
+    const apps = await App.find({ category: { $ne: "System Apps" } });
+
+    // 3️⃣ Save to Redis (10 minutes)
+    await redisService.setEx(cacheKey, 600, JSON.stringify(apps));
+
+    res.json({
+      success: true,
+      source: "mongodb",
+      data: apps
+    });
+  } catch (error) {
+    console.error("getAppsWithoutSystem error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

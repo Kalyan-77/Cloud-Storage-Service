@@ -27,7 +27,7 @@ exports.saveConfig = async (req, res) => {
       console.log('Creating new config');
     } else {
       console.log('Existing config found');
-      
+
       // Update IP Address if provided
       if (ipAddress !== undefined) {
         config.ipAddress = ipAddress;
@@ -65,23 +65,23 @@ exports.saveConfig = async (req, res) => {
 
     console.log('Config saved successfully');
     console.log('=== End Save Config Backend ===');
-    
+
     // Don't send the full API key back in response
     const responseConfig = config.toObject();
     if (responseConfig.perplexity_API) {
       responseConfig.perplexity_API = '***' + responseConfig.perplexity_API.slice(-4);
     }
-    
-    res.status(200).json({ 
-      message: 'Configuration saved successfully', 
+
+    res.status(200).json({
+      message: 'Configuration saved successfully',
       config: responseConfig,
-      desktopApps: config.desktopApps 
+      desktopApps: config.desktopApps
     });
   } catch (error) {
     console.error('❌ Error saving configuration:', error);
-    res.status(500).json({ 
-      message: 'Error saving configuration', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error saving configuration',
+      error: error.message
     });
   }
 };
@@ -149,15 +149,15 @@ exports.deleteConfig = async (req, res) => {
 
     await redisService.del(`config:${userId}`);
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Configuration deleted successfully',
-      deletedConfig: config 
+      deletedConfig: config
     });
   } catch (error) {
     console.error('Error deleting configuration:', error);
-    res.status(500).json({ 
-      message: 'Error deleting configuration', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error deleting configuration',
+      error: error.message
     });
   }
 };
